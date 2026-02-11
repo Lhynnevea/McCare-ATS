@@ -354,15 +354,15 @@ const LeadCaptureSettingsPage = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="relative">
-                <Textarea 
-                  value={embedCode?.embed_code || ''} 
-                  readOnly 
-                  className="font-mono text-xs h-64"
-                />
+                <div className="bg-slate-900 rounded-lg overflow-hidden">
+                  <pre className="font-mono text-xs text-slate-100 p-4 h-64 overflow-auto whitespace-pre-wrap">
+                    {embedCode?.embed_code || 'Loading embed code...'}
+                  </pre>
+                </div>
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  className="absolute top-2 right-2"
+                  className="absolute top-2 right-2 bg-white"
                   onClick={() => copyToClipboard(embedCode?.embed_code, 'Embed code')}
                 >
                   <Copy className="w-4 h-4 mr-1" />
