@@ -49,7 +49,23 @@ const PIPELINE_STAGES = [
 
 const SPECIALTIES = ['ICU', 'ER', 'Med-Surg', 'OR', 'Pediatrics', 'NICU', 'L&D', 'Cardiac', 'Oncology', 'Psych'];
 const PROVINCES = ['Ontario', 'British Columbia', 'Alberta', 'Quebec', 'Manitoba', 'Saskatchewan', 'Nova Scotia', 'New Brunswick'];
-const SOURCES = ['HubSpot', 'LinkedIn', 'Referral', 'Job Board', 'Direct Application', 'Website', 'Career Fair'];
+const SOURCES = ['HubSpot', 'ATS Form', 'API', 'Landing Page', 'LinkedIn', 'Referral', 'Job Board', 'Direct Application', 'Website', 'Career Fair'];
+
+const getSourceBadgeColor = (source) => {
+  const colors = {
+    'HubSpot': 'bg-orange-100 text-orange-700 border-orange-200',
+    'ATS Form': 'bg-red-100 text-red-700 border-red-200',
+    'API': 'bg-blue-100 text-blue-700 border-blue-200',
+    'Landing Page': 'bg-green-100 text-green-700 border-green-200',
+    'Website': 'bg-purple-100 text-purple-700 border-purple-200',
+    'LinkedIn': 'bg-sky-100 text-sky-700 border-sky-200',
+    'Referral': 'bg-teal-100 text-teal-700 border-teal-200',
+    'Job Board': 'bg-amber-100 text-amber-700 border-amber-200',
+    'Direct Application': 'bg-indigo-100 text-indigo-700 border-indigo-200',
+    'Career Fair': 'bg-pink-100 text-pink-700 border-pink-200',
+  };
+  return colors[source] || 'bg-slate-100 text-slate-700 border-slate-200';
+};
 
 const LeadsPage = () => {
   const [leads, setLeads] = useState([]);
