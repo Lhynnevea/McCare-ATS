@@ -550,33 +550,613 @@ async def convert_lead_to_candidate(lead_id: str, current_user: dict = Depends(g
     
     return serialize_doc(candidate_dict)
 
-# HubSpot webhook endpoint (prepared for future integration)
-@api_router.post("/webhooks/hubspot")
-async def hubspot_webhook(payload: dict):
-    """Accept incoming leads from HubSpot webhook"""
-    try:
-        # Extract lead data from HubSpot payload format
-        properties = payload.get("properties", payload)
-        lead_dict = {
+# ==================== LEAD CAPTURE & INTAKE SYSTEM ====================
+
+async def get_lead_capture_settings():
+    """Get or create default lead capture settings"""
+    settings = await db.lead_capture_settings.find_one({}, {"_id": 0})
+    if not settings:
+        # Create default settings
+        settings = {
             "id": str(uuid.uuid4()),
-            "first_name": properties.get("firstname", "Unknown"),
-            "last_name": properties.get("lastname", ""),
-            "email": properties.get("email", ""),
-            "phone": properties.get("phone"),
-            "source": "HubSpot",
-            "specialty": properties.get("specialty"),
-            "province_preference": properties.get("province"),
-            "tags": ["hubspot"],
-            "notes": properties.get("message"),
-            "stage": "New Lead",
+            "required_fields": ["first_name", "last_name", "email"],
+            "optional_fields": ["phone", "specialty", "province_preference", "notes"],
+            "default_pipeline_stage": "New Lead",
+            "default_recruiter_id": None,
+            "auto_tag_rules": [
+                {"field": "province_preference", "value": "Ontario", "tag": "ontario-lead"},
+                {"field": "province_preference", "value": "British Columbia", "tag": "bc-lead"},
+                {"field": "province_preference", "value": "Alberta", "tag": "alberta-lead"},
+            ],
+            "auto_convert_to_candidate": False,
+            "notify_on_new_lead": True,
+            "allowed_sources": ["ATS Form", "API", "HubSpot", "Website", "Landing Page"],
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat()
         }
-        await db.leads.insert_one(lead_dict)
-        return {"status": "success", "lead_id": lead_dict["id"]}
+        await db.lead_capture_settings.insert_one(settings)
+    return settings
+
+async def apply_auto_tags(lead_data: dict, rules: list) -> List[str]:
+    """Apply auto-tagging rules based on lead data"""
+    applied_tags = []
+    for rule in rules:
+        field_value = lead_data.get(rule.get("field"))
+        if field_value and field_value.lower() == rule.get("value", "").lower():
+            applied_tags.append(rule.get("tag"))
+    return applied_tags
+
+async def create_lead_audit_log(lead_id: str, source: str, payload: dict, auto_fields: list, auto_tags: list, recruiter_id: str = None, auto_converted: bool = False):
+    """Create audit log entry for lead intake"""
+    audit_entry = {
+        "id": str(uuid.uuid4()),
+        "lead_id": lead_id,
+        "source": source,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "payload_summary": {
+            "email": payload.get("email"),
+            "name": f"{payload.get('first_name', '')} {payload.get('last_name', '')}",
+            "specialty": payload.get("specialty"),
+            "province": payload.get("province_preference"),
+            "utm_source": payload.get("utm_source"),
+            "utm_campaign": payload.get("utm_campaign"),
+            "form_id": payload.get("form_id"),
+            "landing_page": payload.get("landing_page_url"),
+        },
+        "auto_populated_fields": auto_fields,
+        "auto_tags_applied": auto_tags,
+        "recruiter_assigned": recruiter_id,
+        "auto_converted": auto_converted
+    }
+    await db.lead_audit_logs.insert_one(audit_entry)
+    return audit_entry
+
+async def process_lead_intake(lead_data: dict, source: str) -> dict:
+    """Central lead processing function for all intake sources"""
+    settings = await get_lead_capture_settings()
+    
+    # Generate lead ID
+    lead_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Build tags list
+    tags = lead_data.get("tags", [])
+    tags.append(source.lower().replace(" ", "-"))
+    
+    # Apply auto-tagging rules
+    auto_tags = await apply_auto_tags(lead_data, settings.get("auto_tag_rules", []))
+    tags.extend(auto_tags)
+    tags = list(set(tags))  # Remove duplicates
+    
+    # Build lead document
+    lead_dict = {
+        "id": lead_id,
+        "first_name": lead_data.get("first_name", "Unknown"),
+        "last_name": lead_data.get("last_name", ""),
+        "email": lead_data.get("email", ""),
+        "phone": lead_data.get("phone"),
+        "source": source,
+        "specialty": lead_data.get("specialty"),
+        "province_preference": lead_data.get("province_preference"),
+        "tags": tags,
+        "notes": lead_data.get("notes"),
+        "stage": settings.get("default_pipeline_stage", "New Lead"),
+        "recruiter_id": settings.get("default_recruiter_id"),
+        # UTM/Campaign tracking
+        "utm_source": lead_data.get("utm_source"),
+        "utm_medium": lead_data.get("utm_medium"),
+        "utm_campaign": lead_data.get("utm_campaign"),
+        "utm_term": lead_data.get("utm_term"),
+        "utm_content": lead_data.get("utm_content"),
+        # Form metadata
+        "form_id": lead_data.get("form_id"),
+        "landing_page_url": lead_data.get("landing_page_url"),
+        "referrer_url": lead_data.get("referrer_url"),
+        # HubSpot metadata
+        "hubspot_form_id": lead_data.get("hubspot_form_id"),
+        "hubspot_portal_id": lead_data.get("hubspot_portal_id"),
+        "campaign_name": lead_data.get("campaign_name"),
+        # Timestamps
+        "created_at": now,
+        "updated_at": now
+    }
+    
+    # Insert lead
+    await db.leads.insert_one(lead_dict)
+    
+    # Log activity
+    await db.activities.insert_one({
+        "id": str(uuid.uuid4()),
+        "entity_type": "lead",
+        "entity_id": lead_id,
+        "activity_type": "created",
+        "description": f"Lead captured from {source}: {lead_dict['first_name']} {lead_dict['last_name']}",
+        "user_id": settings.get("default_recruiter_id"),
+        "created_at": now
+    })
+    
+    # Auto-populate fields tracking
+    auto_populated = []
+    if settings.get("default_recruiter_id"):
+        auto_populated.append("recruiter_id")
+    if auto_tags:
+        auto_populated.append("tags")
+    
+    # Auto-convert to candidate if enabled and required fields present
+    auto_converted = False
+    candidate_id = None
+    if settings.get("auto_convert_to_candidate"):
+        required = settings.get("required_fields", [])
+        has_all_required = all(lead_dict.get(f) for f in required)
+        if has_all_required:
+            candidate_dict = {
+                "id": str(uuid.uuid4()),
+                "first_name": lead_dict["first_name"],
+                "last_name": lead_dict["last_name"],
+                "email": lead_dict["email"],
+                "phone": lead_dict.get("phone"),
+                "primary_specialty": lead_dict.get("specialty"),
+                "province": lead_dict.get("province_preference"),
+                "tags": lead_dict.get("tags", []),
+                "notes": lead_dict.get("notes"),
+                "status": "Active",
+                "lead_id": lead_id,
+                "country": "Canada",
+                "desired_locations": [],
+                "travel_willingness": True,
+                "created_at": now,
+                "updated_at": now
+            }
+            await db.candidates.insert_one(candidate_dict)
+            candidate_id = candidate_dict["id"]
+            auto_converted = True
+            await db.leads.update_one({"id": lead_id}, {"$set": {"stage": "Hired", "updated_at": now}})
+    
+    # Create audit log
+    await create_lead_audit_log(
+        lead_id=lead_id,
+        source=source,
+        payload=lead_data,
+        auto_fields=auto_populated,
+        auto_tags=auto_tags,
+        recruiter_id=settings.get("default_recruiter_id"),
+        auto_converted=auto_converted
+    )
+    
+    result = serialize_doc(lead_dict)
+    if auto_converted:
+        result["auto_converted"] = True
+        result["candidate_id"] = candidate_id
+    
+    return result
+
+# Public Lead Submission Endpoint (No Auth Required)
+@api_router.post("/public/leads")
+async def submit_public_lead(lead: PublicLeadSubmission):
+    """
+    Public endpoint for submitting leads from external websites and forms.
+    No authentication required. Can be called from landing pages, embedded forms, etc.
+    """
+    try:
+        lead_data = lead.model_dump()
+        lead_data["source"] = "API"
+        
+        # Check if email already exists
+        existing = await db.leads.find_one({"email": lead.email})
+        if existing:
+            # Update existing lead instead of creating duplicate
+            update_data = {k: v for k, v in lead_data.items() if v is not None}
+            update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+            await db.leads.update_one({"email": lead.email}, {"$set": update_data})
+            
+            # Create audit log for update
+            await create_lead_audit_log(
+                lead_id=existing["id"],
+                source="API (Update)",
+                payload=lead_data,
+                auto_fields=[],
+                auto_tags=[],
+                auto_converted=False
+            )
+            
+            return {"status": "updated", "lead_id": existing["id"], "message": "Lead updated with new information"}
+        
+        result = await process_lead_intake(lead_data, "API")
+        return {"status": "success", "lead_id": result["id"], "auto_converted": result.get("auto_converted", False)}
+    except Exception as e:
+        logger.error(f"Public lead submission error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+# Built-in ATS Form Submission Endpoint
+@api_router.post("/public/form-submit")
+async def submit_form_lead(payload: dict):
+    """
+    Endpoint for the built-in ATS lead capture form.
+    Accepts form data and creates a lead with "ATS Form" source.
+    """
+    try:
+        lead_data = {
+            "first_name": payload.get("first_name", payload.get("firstName", "")),
+            "last_name": payload.get("last_name", payload.get("lastName", "")),
+            "email": payload.get("email", ""),
+            "phone": payload.get("phone", ""),
+            "specialty": payload.get("specialty", payload.get("specialization", "")),
+            "province_preference": payload.get("province_preference", payload.get("province", "")),
+            "notes": payload.get("notes", payload.get("message", "")),
+            "utm_source": payload.get("utm_source"),
+            "utm_medium": payload.get("utm_medium"),
+            "utm_campaign": payload.get("utm_campaign"),
+            "form_id": payload.get("form_id", "ats-default-form"),
+            "landing_page_url": payload.get("landing_page_url"),
+            "referrer_url": payload.get("referrer_url"),
+        }
+        
+        if not lead_data["email"]:
+            raise HTTPException(status_code=400, detail="Email is required")
+        
+        result = await process_lead_intake(lead_data, "ATS Form")
+        return {
+            "status": "success", 
+            "lead_id": result["id"],
+            "message": "Thank you! We'll be in touch soon.",
+            "auto_converted": result.get("auto_converted", False)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Form submission error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+# Enhanced HubSpot Webhook Endpoint
+@api_router.post("/webhooks/hubspot")
+async def hubspot_webhook(payload: dict):
+    """
+    Accept incoming leads from HubSpot webhook.
+    Supports standard HubSpot form submission payloads.
+    Captures UTM parameters, form IDs, campaign names, etc.
+    """
+    try:
+        # Extract properties from various HubSpot payload formats
+        properties = payload.get("properties", {})
+        if not properties:
+            properties = payload
+        
+        # Map HubSpot field names to our schema
+        lead_data = {
+            "first_name": properties.get("firstname", properties.get("first_name", "Unknown")),
+            "last_name": properties.get("lastname", properties.get("last_name", "")),
+            "email": properties.get("email", ""),
+            "phone": properties.get("phone", properties.get("mobilephone", "")),
+            "specialty": properties.get("specialty", properties.get("nursing_specialty", "")),
+            "province_preference": properties.get("province", properties.get("state", "")),
+            "notes": properties.get("message", properties.get("notes", "")),
+            # UTM tracking
+            "utm_source": properties.get("utm_source", payload.get("utm_source")),
+            "utm_medium": properties.get("utm_medium", payload.get("utm_medium")),
+            "utm_campaign": properties.get("utm_campaign", payload.get("utm_campaign")),
+            "utm_term": properties.get("utm_term"),
+            "utm_content": properties.get("utm_content"),
+            # HubSpot metadata
+            "hubspot_form_id": payload.get("formGuid", payload.get("form_id")),
+            "hubspot_portal_id": payload.get("portalId", payload.get("portal_id")),
+            "campaign_name": payload.get("campaign", payload.get("campaign_name")),
+            "form_id": payload.get("formGuid", "hubspot-webhook"),
+        }
+        
+        if not lead_data["email"]:
+            # Try to extract email from nested structures
+            if "email" in str(payload):
+                for key, value in payload.items():
+                    if isinstance(value, dict) and "email" in value:
+                        lead_data["email"] = value["email"]
+                        break
+        
+        # Check for existing lead by email
+        if lead_data["email"]:
+            existing = await db.leads.find_one({"email": lead_data["email"]})
+            if existing:
+                # Update existing lead
+                update_data = {k: v for k, v in lead_data.items() if v}
+                update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+                update_data["source"] = "HubSpot"  # Update source
+                await db.leads.update_one({"email": lead_data["email"]}, {"$set": update_data})
+                
+                await create_lead_audit_log(
+                    lead_id=existing["id"],
+                    source="HubSpot (Update)",
+                    payload=lead_data,
+                    auto_fields=[],
+                    auto_tags=[],
+                    auto_converted=False
+                )
+                
+                return {"status": "updated", "lead_id": existing["id"]}
+        
+        result = await process_lead_intake(lead_data, "HubSpot")
+        return {
+            "status": "success", 
+            "lead_id": result["id"],
+            "auto_converted": result.get("auto_converted", False)
+        }
     except Exception as e:
         logger.error(f"HubSpot webhook error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
+# Landing Page Submission Endpoint
+@api_router.post("/public/landing-page")
+async def landing_page_submission(payload: dict):
+    """
+    Endpoint for landing page form submissions.
+    Specifically designed for external landing pages with custom forms.
+    """
+    try:
+        lead_data = {
+            "first_name": payload.get("first_name", payload.get("firstName", payload.get("name", "").split()[0] if payload.get("name") else "")),
+            "last_name": payload.get("last_name", payload.get("lastName", payload.get("name", "").split()[-1] if payload.get("name") and len(payload.get("name", "").split()) > 1 else "")),
+            "email": payload.get("email", ""),
+            "phone": payload.get("phone", payload.get("telephone", "")),
+            "specialty": payload.get("specialty", payload.get("specialization", payload.get("nursing_type", ""))),
+            "province_preference": payload.get("province", payload.get("province_preference", payload.get("location", ""))),
+            "notes": payload.get("notes", payload.get("message", payload.get("comments", ""))),
+            "utm_source": payload.get("utm_source"),
+            "utm_medium": payload.get("utm_medium"),
+            "utm_campaign": payload.get("utm_campaign"),
+            "utm_term": payload.get("utm_term"),
+            "utm_content": payload.get("utm_content"),
+            "form_id": payload.get("form_id", "landing-page"),
+            "landing_page_url": payload.get("landing_page_url", payload.get("page_url")),
+            "referrer_url": payload.get("referrer_url", payload.get("referrer")),
+        }
+        
+        if not lead_data["email"]:
+            raise HTTPException(status_code=400, detail="Email is required")
+        
+        result = await process_lead_intake(lead_data, "Landing Page")
+        return {
+            "status": "success",
+            "lead_id": result["id"],
+            "message": "Lead captured successfully",
+            "auto_converted": result.get("auto_converted", False)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Landing page submission error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+# ==================== LEAD CAPTURE SETTINGS ENDPOINTS ====================
+
+@api_router.get("/lead-capture/settings")
+async def get_lead_settings(current_user: dict = Depends(get_current_user)):
+    """Get current lead capture settings"""
+    if current_user["role"] != "Admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    settings = await get_lead_capture_settings()
+    return settings
+
+@api_router.put("/lead-capture/settings")
+async def update_lead_settings(settings_update: dict, current_user: dict = Depends(get_current_user)):
+    """Update lead capture settings"""
+    if current_user["role"] != "Admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    settings_update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    existing = await db.lead_capture_settings.find_one({})
+    if existing:
+        await db.lead_capture_settings.update_one({}, {"$set": settings_update})
+    else:
+        settings_update["id"] = str(uuid.uuid4())
+        settings_update["created_at"] = datetime.now(timezone.utc).isoformat()
+        await db.lead_capture_settings.insert_one(settings_update)
+    
+    return await get_lead_capture_settings()
+
+@api_router.get("/lead-capture/embed-code")
+async def get_embed_code(current_user: dict = Depends(get_current_user)):
+    """Generate embeddable form code for external websites"""
+    if current_user["role"] not in ["Admin", "Recruiter"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    backend_url = os.environ.get('BACKEND_URL', 'https://mccare-ats.preview.emergentagent.com')
+    
+    embed_html = f'''<!-- McCare Global ATS Lead Capture Form -->
+<div id="mccare-lead-form"></div>
+<script>
+(function() {{
+  var formContainer = document.getElementById('mccare-lead-form');
+  var form = document.createElement('form');
+  form.id = 'mccare-capture-form';
+  form.style.cssText = 'max-width:500px;margin:0 auto;font-family:system-ui,-apple-system,sans-serif;';
+  
+  var fields = [
+    {{name: 'first_name', label: 'First Name', type: 'text', required: true}},
+    {{name: 'last_name', label: 'Last Name', type: 'text', required: true}},
+    {{name: 'email', label: 'Email', type: 'email', required: true}},
+    {{name: 'phone', label: 'Phone', type: 'tel', required: false}},
+    {{name: 'specialty', label: 'Nursing Specialty', type: 'select', options: ['', 'ICU', 'ER', 'Med-Surg', 'OR', 'Pediatrics', 'NICU', 'L&D', 'Cardiac', 'Oncology', 'Psych']}},
+    {{name: 'province_preference', label: 'Province Preference', type: 'select', options: ['', 'Ontario', 'British Columbia', 'Alberta', 'Quebec', 'Manitoba', 'Saskatchewan', 'Nova Scotia', 'New Brunswick']}},
+    {{name: 'notes', label: 'Message', type: 'textarea', required: false}}
+  ];
+  
+  fields.forEach(function(field) {{
+    var wrapper = document.createElement('div');
+    wrapper.style.cssText = 'margin-bottom:16px;';
+    
+    var label = document.createElement('label');
+    label.textContent = field.label + (field.required ? ' *' : '');
+    label.style.cssText = 'display:block;margin-bottom:4px;font-weight:500;color:#374151;';
+    wrapper.appendChild(label);
+    
+    var input;
+    if (field.type === 'select') {{
+      input = document.createElement('select');
+      field.options.forEach(function(opt) {{
+        var option = document.createElement('option');
+        option.value = opt;
+        option.textContent = opt || 'Select...';
+        input.appendChild(option);
+      }});
+    }} else if (field.type === 'textarea') {{
+      input = document.createElement('textarea');
+      input.rows = 3;
+    }} else {{
+      input = document.createElement('input');
+      input.type = field.type;
+    }}
+    
+    input.name = field.name;
+    input.required = field.required;
+    input.style.cssText = 'width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;box-sizing:border-box;';
+    wrapper.appendChild(input);
+    form.appendChild(wrapper);
+  }});
+  
+  // Hidden fields for tracking
+  var hiddenFields = ['utm_source', 'utm_medium', 'utm_campaign', 'landing_page_url', 'referrer_url'];
+  hiddenFields.forEach(function(name) {{
+    var hidden = document.createElement('input');
+    hidden.type = 'hidden';
+    hidden.name = name;
+    form.appendChild(hidden);
+  }});
+  
+  // Submit button
+  var submitBtn = document.createElement('button');
+  submitBtn.type = 'submit';
+  submitBtn.textContent = 'Submit Application';
+  submitBtn.style.cssText = 'width:100%;padding:12px;background:#ff0000;color:white;border:none;border-radius:6px;font-size:16px;font-weight:600;cursor:pointer;';
+  form.appendChild(submitBtn);
+  
+  // Status message
+  var status = document.createElement('div');
+  status.id = 'mccare-status';
+  status.style.cssText = 'margin-top:12px;padding:10px;border-radius:6px;display:none;';
+  form.appendChild(status);
+  
+  formContainer.appendChild(form);
+  
+  // Populate UTM params
+  var params = new URLSearchParams(window.location.search);
+  form.querySelector('[name="utm_source"]').value = params.get('utm_source') || '';
+  form.querySelector('[name="utm_medium"]').value = params.get('utm_medium') || '';
+  form.querySelector('[name="utm_campaign"]').value = params.get('utm_campaign') || '';
+  form.querySelector('[name="landing_page_url"]').value = window.location.href;
+  form.querySelector('[name="referrer_url"]').value = document.referrer;
+  
+  // Form submission
+  form.addEventListener('submit', function(e) {{
+    e.preventDefault();
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting...';
+    
+    var formData = {{}};
+    new FormData(form).forEach(function(value, key) {{
+      formData[key] = value;
+    }});
+    formData.form_id = 'mccare-embed-form';
+    
+    fetch('{backend_url}/api/public/form-submit', {{
+      method: 'POST',
+      headers: {{'Content-Type': 'application/json'}},
+      body: JSON.stringify(formData)
+    }})
+    .then(function(r) {{ return r.json(); }})
+    .then(function(data) {{
+      status.style.display = 'block';
+      if (data.status === 'success') {{
+        status.style.background = '#d1fae5';
+        status.style.color = '#065f46';
+        status.textContent = 'Thank you! We will be in touch soon.';
+        form.reset();
+      }} else {{
+        status.style.background = '#fee2e2';
+        status.style.color = '#991b1b';
+        status.textContent = data.detail || 'Something went wrong. Please try again.';
+      }}
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Submit Application';
+    }})
+    .catch(function(err) {{
+      status.style.display = 'block';
+      status.style.background = '#fee2e2';
+      status.style.color = '#991b1b';
+      status.textContent = 'Network error. Please try again.';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Submit Application';
+    }});
+  }});
+}})();
+</script>
+<!-- End McCare Global ATS Lead Capture Form -->'''
+    
+    return {
+        "embed_code": embed_html,
+        "api_endpoint": f"{backend_url}/api/public/leads",
+        "form_endpoint": f"{backend_url}/api/public/form-submit",
+        "hubspot_webhook": f"{backend_url}/api/webhooks/hubspot",
+        "landing_page_endpoint": f"{backend_url}/api/public/landing-page"
+    }
+
+# ==================== LEAD AUDIT LOG ENDPOINTS ====================
+
+@api_router.get("/lead-audit-logs")
+async def get_lead_audit_logs(
+    lead_id: Optional[str] = None,
+    source: Optional[str] = None,
+    limit: int = Query(default=100, le=500),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get lead intake audit logs"""
+    if current_user["role"] not in ["Admin", "Recruiter"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    query = {}
+    if lead_id:
+        query["lead_id"] = lead_id
+    if source:
+        query["source"] = {"$regex": source, "$options": "i"}
+    
+    logs = await db.lead_audit_logs.find(query, {"_id": 0}).sort("timestamp", -1).to_list(limit)
+    return logs
+
+@api_router.get("/lead-audit-logs/{log_id}")
+async def get_audit_log_detail(log_id: str, current_user: dict = Depends(get_current_user)):
+    """Get detailed audit log entry"""
+    if current_user["role"] not in ["Admin", "Recruiter"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    log = await db.lead_audit_logs.find_one({"id": log_id}, {"_id": 0})
+    if not log:
+        raise HTTPException(status_code=404, detail="Audit log not found")
+    return log
+
+@api_router.get("/lead-intake/stats")
+async def get_lead_intake_stats(current_user: dict = Depends(get_current_user)):
+    """Get lead intake statistics by source"""
+    if current_user["role"] not in ["Admin", "Recruiter"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get counts by source
+    pipeline = [
+        {"$group": {"_id": "$source", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}}
+    ]
+    source_counts = await db.leads.aggregate(pipeline).to_list(100)
+    
+    # Get recent leads count (last 7 days)
+    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    recent_count = await db.leads.count_documents({"created_at": {"$gte": week_ago}})
+    
+    # Get auto-converted count
+    auto_converted = await db.lead_audit_logs.count_documents({"auto_converted": True})
+    
+    return {
+        "by_source": {item["_id"] or "Unknown": item["count"] for item in source_counts},
+        "last_7_days": recent_count,
+        "auto_converted_total": auto_converted,
+        "total_leads": await db.leads.count_documents({})
+    }
 
 # ==================== CANDIDATES ENDPOINTS ====================
 
