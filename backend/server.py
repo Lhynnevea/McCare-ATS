@@ -1276,10 +1276,271 @@ async def update_document(document_id: str, document_update: DocumentUpdate, cur
 
 @api_router.delete("/documents/{document_id}")
 async def delete_document(document_id: str, current_user: dict = Depends(get_current_user)):
+    # Get document to find file path
+    document = await db.documents.find_one({"id": document_id}, {"_id": 0})
+    if document:
+        # Delete file if it exists locally
+        file_path = document.get("file_path")
+        if file_path:
+            full_path = UPLOAD_DIR / file_path
+            if full_path.exists():
+                full_path.unlink()
+    
     result = await db.documents.delete_one({"id": document_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Document not found")
     return {"message": "Document deleted successfully"}
+
+# ==================== FILE UPLOAD ENDPOINTS ====================
+
+def validate_file(file: UploadFile) -> tuple:
+    """Validate file extension and size"""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+    
+    # Check extension
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"File type not allowed. Allowed types: {', '.join(ALLOWED_EXTENSIONS)}"
+        )
+    
+    return ext
+
+@api_router.post("/upload/document")
+async def upload_document(
+    file: UploadFile = File(...),
+    candidate_id: str = Form(...),
+    document_type: str = Form(...),
+    issue_date: Optional[str] = Form(None),
+    expiry_date: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    current_user: dict = Depends(get_current_user)
+):
+    """Upload a document file for a candidate"""
+    # Validate file
+    ext = validate_file(file)
+    
+    # Check file size
+    file.file.seek(0, 2)  # Seek to end
+    file_size = file.file.tell()
+    file.file.seek(0)  # Reset to beginning
+    
+    if file_size > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB")
+    
+    # Create unique filename
+    doc_id = str(uuid.uuid4())
+    safe_filename = f"{doc_id}{ext}"
+    
+    # Create candidate-specific directory
+    candidate_dir = UPLOAD_DIR / candidate_id
+    candidate_dir.mkdir(exist_ok=True)
+    
+    file_path = candidate_dir / safe_filename
+    relative_path = f"{candidate_id}/{safe_filename}"
+    
+    # Save file
+    try:
+        async with aiofiles.open(file_path, 'wb') as out_file:
+            content = await file.read()
+            await out_file.write(content)
+    except Exception as e:
+        logger.error(f"File upload error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save file")
+    
+    # Get backend URL for file access
+    backend_url = os.environ.get('BACKEND_URL', 'https://mccare-ats.preview.emergentagent.com')
+    file_url = f"{backend_url}/api/files/{relative_path}"
+    
+    # Create document record
+    now = datetime.now(timezone.utc).isoformat()
+    document_dict = {
+        "id": doc_id,
+        "candidate_id": candidate_id,
+        "document_type": document_type,
+        "file_url": file_url,
+        "file_path": relative_path,
+        "file_name": file.filename,
+        "file_size": file_size,
+        "file_type": ext,
+        "issue_date": issue_date,
+        "expiry_date": expiry_date,
+        "notes": notes,
+        "status": "Pending",
+        "uploaded_by": current_user["id"],
+        "created_at": now,
+        "updated_at": now
+    }
+    
+    await db.documents.insert_one(document_dict)
+    
+    # Log activity
+    await db.activities.insert_one({
+        "id": str(uuid.uuid4()),
+        "entity_type": "document",
+        "entity_id": doc_id,
+        "activity_type": "uploaded",
+        "description": f"Document uploaded: {document_type} ({file.filename})",
+        "user_id": current_user["id"],
+        "created_at": now
+    })
+    
+    return serialize_doc(document_dict)
+
+@api_router.post("/upload/document/{document_id}/replace")
+async def replace_document_file(
+    document_id: str,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Replace an existing document's file"""
+    # Get existing document
+    document = await db.documents.find_one({"id": document_id}, {"_id": 0})
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Validate new file
+    ext = validate_file(file)
+    
+    # Check file size
+    file.file.seek(0, 2)
+    file_size = file.file.tell()
+    file.file.seek(0)
+    
+    if file_size > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB")
+    
+    # Delete old file if exists
+    old_file_path = document.get("file_path")
+    if old_file_path:
+        old_full_path = UPLOAD_DIR / old_file_path
+        if old_full_path.exists():
+            old_full_path.unlink()
+    
+    # Create new filename
+    candidate_id = document["candidate_id"]
+    safe_filename = f"{document_id}{ext}"
+    
+    candidate_dir = UPLOAD_DIR / candidate_id
+    candidate_dir.mkdir(exist_ok=True)
+    
+    file_path = candidate_dir / safe_filename
+    relative_path = f"{candidate_id}/{safe_filename}"
+    
+    # Save new file
+    try:
+        async with aiofiles.open(file_path, 'wb') as out_file:
+            content = await file.read()
+            await out_file.write(content)
+    except Exception as e:
+        logger.error(f"File replacement error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save file")
+    
+    backend_url = os.environ.get('BACKEND_URL', 'https://mccare-ats.preview.emergentagent.com')
+    file_url = f"{backend_url}/api/files/{relative_path}"
+    
+    # Update document record
+    now = datetime.now(timezone.utc).isoformat()
+    update_data = {
+        "file_url": file_url,
+        "file_path": relative_path,
+        "file_name": file.filename,
+        "file_size": file_size,
+        "file_type": ext,
+        "status": "Pending",  # Reset status when file is replaced
+        "updated_at": now
+    }
+    
+    await db.documents.update_one({"id": document_id}, {"$set": update_data})
+    
+    updated_doc = await db.documents.find_one({"id": document_id}, {"_id": 0})
+    return updated_doc
+
+@api_router.get("/files/{candidate_id}/{filename}")
+async def get_file(candidate_id: str, filename: str, current_user: dict = Depends(get_current_user)):
+    """Serve uploaded files (requires authentication)"""
+    file_path = UPLOAD_DIR / candidate_id / filename
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # Determine content type
+    ext = Path(filename).suffix.lower()
+    content_types = {
+        '.pdf': 'application/pdf',
+        '.doc': 'application/msword',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.gif': 'image/gif',
+        '.txt': 'text/plain'
+    }
+    content_type = content_types.get(ext, 'application/octet-stream')
+    
+    return FileResponse(
+        path=file_path,
+        media_type=content_type,
+        filename=filename
+    )
+
+@api_router.get("/documents/{document_id}/download")
+async def download_document(document_id: str, current_user: dict = Depends(get_current_user)):
+    """Download a document file"""
+    document = await db.documents.find_one({"id": document_id}, {"_id": 0})
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    file_path_str = document.get("file_path")
+    if not file_path_str:
+        raise HTTPException(status_code=404, detail="No file associated with this document")
+    
+    file_path = UPLOAD_DIR / file_path_str
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found on server")
+    
+    original_filename = document.get("file_name", file_path.name)
+    
+    return FileResponse(
+        path=file_path,
+        filename=original_filename,
+        media_type='application/octet-stream'
+    )
+
+@api_router.get("/upload/stats")
+async def get_upload_stats(current_user: dict = Depends(get_current_user)):
+    """Get file upload statistics"""
+    if current_user["role"] not in ["Admin", "Compliance Officer"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Count documents with files
+    total_docs = await db.documents.count_documents({})
+    docs_with_files = await db.documents.count_documents({"file_path": {"$exists": True, "$ne": None}})
+    
+    # Calculate total storage used
+    total_size = 0
+    if UPLOAD_DIR.exists():
+        for file_path in UPLOAD_DIR.rglob('*'):
+            if file_path.is_file():
+                total_size += file_path.stat().st_size
+    
+    # Get documents by type
+    pipeline = [
+        {"$group": {"_id": "$document_type", "count": {"$sum": 1}}}
+    ]
+    type_counts = await db.documents.aggregate(pipeline).to_list(100)
+    
+    return {
+        "total_documents": total_docs,
+        "documents_with_files": docs_with_files,
+        "total_storage_bytes": total_size,
+        "total_storage_mb": round(total_size / (1024 * 1024), 2),
+        "max_file_size_mb": MAX_FILE_SIZE // (1024 * 1024),
+        "allowed_extensions": list(ALLOWED_EXTENSIONS),
+        "by_type": {item["_id"] or "Unknown": item["count"] for item in type_counts}
+    }
 
 @api_router.get("/compliance/expiring")
 async def get_expiring_documents(
