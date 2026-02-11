@@ -350,7 +350,9 @@ const LeadsPage = () => {
                         </div>
                         {lead.source && (
                           <div className="mt-2 pt-2 border-t border-slate-100">
-                            <span className="text-xs text-slate-400">Source: {lead.source}</span>
+                            <Badge className={`${getSourceBadgeColor(lead.source)} border text-xs`}>
+                              {lead.source}
+                            </Badge>
                           </div>
                         )}
                         {/* Stage change buttons */}
