@@ -371,23 +371,23 @@ const ClientsJobsPage = () => {
                     />
                   </div>
                 </div>
-                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <Select value={filterStatus || "all"} onValueChange={(v) => setFilterStatus(v === "all" ? "" : v)}>
                   <SelectTrigger className="w-[140px]">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
                     {JOB_STATUSES.map(s => (
                       <SelectItem key={s} value={s}>{s}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <Select value={filterSpecialty} onValueChange={setFilterSpecialty}>
+                <Select value={filterSpecialty || "all"} onValueChange={(v) => setFilterSpecialty(v === "all" ? "" : v)}>
                   <SelectTrigger className="w-[140px]">
                     <SelectValue placeholder="Specialty" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
                     {SPECIALTIES.map(s => (
                       <SelectItem key={s} value={s}>{s}</SelectItem>
                     ))}

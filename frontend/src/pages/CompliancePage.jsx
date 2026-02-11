@@ -274,25 +274,25 @@ const CompliancePage = () => {
                 />
               </div>
             </div>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <Select value={filterStatus || "all"} onValueChange={(v) => setFilterStatus(v === "all" ? "" : v)}>
               <SelectTrigger className="w-[160px]">
                 <Filter className="w-4 h-4 mr-2" />
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Statuses</SelectItem>
+                <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="Verified">Verified</SelectItem>
                 <SelectItem value="Pending">Pending</SelectItem>
                 <SelectItem value="Expiring Soon">Expiring Soon</SelectItem>
                 <SelectItem value="Expired">Expired</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={filterDocType} onValueChange={setFilterDocType}>
+            <Select value={filterDocType || "all"} onValueChange={(v) => setFilterDocType(v === "all" ? "" : v)}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Document Type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Types</SelectItem>
+                <SelectItem value="all">All Types</SelectItem>
                 {documentTypes.map(t => (
                   <SelectItem key={t} value={t}>{t}</SelectItem>
                 ))}

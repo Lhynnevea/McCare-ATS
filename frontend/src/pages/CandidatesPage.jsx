@@ -185,37 +185,37 @@ const CandidatesPage = () => {
                 />
               </div>
             </div>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <Select value={filterStatus || "all"} onValueChange={(v) => setFilterStatus(v === "all" ? "" : v)}>
               <SelectTrigger className="w-[160px]" data-testid="filter-status">
                 <Filter className="w-4 h-4 mr-2" />
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Statuses</SelectItem>
+                <SelectItem value="all">All Statuses</SelectItem>
                 {STATUSES.map(s => (
                   <SelectItem key={s} value={s}>{s}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Select value={filterSpecialty} onValueChange={setFilterSpecialty}>
+            <Select value={filterSpecialty || "all"} onValueChange={(v) => setFilterSpecialty(v === "all" ? "" : v)}>
               <SelectTrigger className="w-[160px]">
                 <Briefcase className="w-4 h-4 mr-2" />
                 <SelectValue placeholder="Specialty" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Specialties</SelectItem>
+                <SelectItem value="all">All Specialties</SelectItem>
                 {SPECIALTIES.map(s => (
                   <SelectItem key={s} value={s}>{s}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Select value={filterProvince} onValueChange={setFilterProvince}>
+            <Select value={filterProvince || "all"} onValueChange={(v) => setFilterProvince(v === "all" ? "" : v)}>
               <SelectTrigger className="w-[160px]">
                 <MapPin className="w-4 h-4 mr-2" />
                 <SelectValue placeholder="Province" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Provinces</SelectItem>
+                <SelectItem value="all">All Provinces</SelectItem>
                 {PROVINCES.map(p => (
                   <SelectItem key={p} value={p}>{p}</SelectItem>
                 ))}
