@@ -1815,6 +1815,8 @@ async def seed_database():
     await db.assignments.delete_many({})
     await db.timesheets.delete_many({})
     await db.activities.delete_many({})
+    await db.lead_capture_settings.delete_many({})
+    await db.lead_audit_logs.delete_many({})
     
     now = datetime.now(timezone.utc)
     
@@ -1828,6 +1830,30 @@ async def seed_database():
         {"id": str(uuid.uuid4()), "email": "nurse@mccareglobal.com", "password": hash_password("nurse123"), "first_name": "Amanda", "last_name": "Smith", "role": "Nurse", "created_at": now.isoformat()},
     ]
     await db.users.insert_many(users)
+    recruiter_id = users[1]["id"]
+    
+    # Create lead capture settings
+    lead_capture_settings = {
+        "id": str(uuid.uuid4()),
+        "required_fields": ["first_name", "last_name", "email"],
+        "optional_fields": ["phone", "specialty", "province_preference", "notes"],
+        "default_pipeline_stage": "New Lead",
+        "default_recruiter_id": recruiter_id,
+        "auto_tag_rules": [
+            {"field": "province_preference", "value": "Ontario", "tag": "ontario-lead"},
+            {"field": "province_preference", "value": "British Columbia", "tag": "bc-lead"},
+            {"field": "province_preference", "value": "Alberta", "tag": "alberta-lead"},
+            {"field": "province_preference", "value": "Quebec", "tag": "quebec-lead"},
+            {"field": "specialty", "value": "ICU", "tag": "critical-care"},
+            {"field": "specialty", "value": "ER", "tag": "emergency"},
+        ],
+        "auto_convert_to_candidate": False,
+        "notify_on_new_lead": True,
+        "allowed_sources": ["ATS Form", "API", "HubSpot", "Website", "Landing Page", "Direct", "LinkedIn", "Referral", "Job Board", "Career Fair"],
+        "created_at": now.isoformat(),
+        "updated_at": now.isoformat()
+    }
+    await db.lead_capture_settings.insert_one(lead_capture_settings)
     recruiter_id = users[1]["id"]
     
     # Create leads
