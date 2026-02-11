@@ -77,7 +77,9 @@ const MainLayout = ({ children }) => {
 
         {/* Navigation */}
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
+          {navItems
+            .filter(item => !item.adminOnly || user?.role === 'Admin' || user?.role === 'Recruiter')
+            .map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path || 
               (item.path === '/dashboard' && location.pathname === '/');
