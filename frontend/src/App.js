@@ -16,6 +16,7 @@ import AssignmentsPage from './pages/AssignmentsPage';
 import TimesheetsPage from './pages/TimesheetsPage';
 import ReportsPage from './pages/ReportsPage';
 import SettingsPage from './pages/SettingsPage';
+import LeadCaptureSettingsPage from './pages/LeadCaptureSettingsPage';
 
 // Layout
 import MainLayout from './components/layout/MainLayout';
