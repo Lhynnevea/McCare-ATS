@@ -1854,15 +1854,15 @@ async def seed_database():
         "updated_at": now.isoformat()
     }
     await db.lead_capture_settings.insert_one(lead_capture_settings)
-    recruiter_id = users[1]["id"]
     
-    # Create leads
+    # Create leads with diverse sources
     stages = ["New Lead", "Contacted", "Screening Scheduled", "Application Submitted", "Interview", "Offer"]
     specialties = ["ICU", "ER", "Med-Surg", "OR", "Pediatrics", "NICU", "L&D", "Cardiac"]
     provinces = ["Ontario", "British Columbia", "Alberta", "Quebec", "Manitoba", "Saskatchewan"]
-    sources = ["HubSpot", "LinkedIn", "Referral", "Job Board", "Direct Application", "Website"]
+    sources = ["HubSpot", "ATS Form", "API", "Landing Page", "LinkedIn", "Referral", "Job Board", "Direct Application", "Website", "Career Fair"]
     
     leads = []
+    lead_audit_logs = []
     lead_names = [
         ("Jessica", "Martinez"), ("Ryan", "Thompson"), ("Michelle", "Garcia"), ("Brandon", "Wilson"),
         ("Stephanie", "Anderson"), ("Kevin", "Taylor"), ("Lauren", "Thomas"), ("Justin", "Jackson"),
@@ -1871,23 +1871,71 @@ async def seed_database():
     ]
     
     for i, (first, last) in enumerate(lead_names):
-        leads.append({
-            "id": str(uuid.uuid4()),
+        lead_id = str(uuid.uuid4())
+        source = sources[i % len(sources)]
+        province = provinces[i % len(provinces)]
+        specialty = specialties[i % len(specialties)]
+        
+        # Generate tags based on source and province
+        tags = [source.lower().replace(" ", "-")]
+        if province == "Ontario":
+            tags.append("ontario-lead")
+        elif province == "British Columbia":
+            tags.append("bc-lead")
+        if specialty in ["ICU", "ER"]:
+            tags.append("critical-care")
+        if i % 2 == 0:
+            tags.extend(["travel-nurse", "experienced"])
+        else:
+            tags.append("new-grad")
+        
+        lead = {
+            "id": lead_id,
             "first_name": first,
             "last_name": last,
             "email": f"{first.lower()}.{last.lower()}@email.com",
             "phone": f"+1-416-555-{1000+i:04d}",
-            "source": sources[i % len(sources)],
-            "specialty": specialties[i % len(specialties)],
-            "province_preference": provinces[i % len(provinces)],
-            "tags": ["travel-nurse", "experienced"] if i % 2 == 0 else ["new-grad"],
-            "notes": f"Interested in travel nursing opportunities in {provinces[i % len(provinces)]}",
+            "source": source,
+            "specialty": specialty,
+            "province_preference": province,
+            "tags": tags,
+            "notes": f"Interested in travel nursing opportunities in {province}",
             "stage": stages[i % len(stages)],
             "recruiter_id": recruiter_id,
+            # UTM tracking for web sources
+            "utm_source": "google" if source in ["Landing Page", "Website"] else None,
+            "utm_medium": "cpc" if source == "Landing Page" else "organic" if source == "Website" else None,
+            "utm_campaign": f"travel-nurse-{province.lower().replace(' ', '-')}" if source in ["Landing Page", "Website"] else None,
+            "form_id": f"form-{source.lower().replace(' ', '-')}" if source in ["ATS Form", "Landing Page", "HubSpot"] else None,
+            "hubspot_form_id": f"hs-form-{i}" if source == "HubSpot" else None,
             "created_at": (now - timedelta(days=30-i)).isoformat(),
             "updated_at": now.isoformat()
+        }
+        leads.append(lead)
+        
+        # Create audit log for each lead
+        lead_audit_logs.append({
+            "id": str(uuid.uuid4()),
+            "lead_id": lead_id,
+            "source": source,
+            "timestamp": (now - timedelta(days=30-i)).isoformat(),
+            "payload_summary": {
+                "email": lead["email"],
+                "name": f"{first} {last}",
+                "specialty": specialty,
+                "province": province,
+                "utm_source": lead.get("utm_source"),
+                "utm_campaign": lead.get("utm_campaign"),
+                "form_id": lead.get("form_id"),
+            },
+            "auto_populated_fields": ["recruiter_id", "tags"],
+            "auto_tags_applied": [t for t in tags if t not in [source.lower().replace(" ", "-")]],
+            "recruiter_assigned": recruiter_id,
+            "auto_converted": False
         })
+    
     await db.leads.insert_many(leads)
+    await db.lead_audit_logs.insert_many(lead_audit_logs)
     
     # Create candidates
     candidates = []
