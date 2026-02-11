@@ -167,6 +167,7 @@ function App() {
                     <Route path="/timesheets" element={<TimesheetsPage />} />
                     <Route path="/reports" element={<ReportsPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/lead-capture" element={<LeadCaptureSettingsPage />} />
                   </Routes>
                 </MainLayout>
               </ProtectedRoute>
