@@ -3,6 +3,14 @@
 ## Original Problem Statement
 Build a full-stack web app called McCare Global ATS – Travel Nurse Recruitment & Staffing Platform for McCare Global Healthcare Services Inc. (Canadian healthcare staffing agency hiring travel nurses). Backend similar to Crelate (ATS/CRM) with a HubSpot-style lead/pipeline front end.
 
+**Enhancement Request:** Build standalone lead intake capabilities like HubSpot, including:
+- Built-in Lead Intake Forms (embeddable)
+- Public Lead API Endpoints
+- HubSpot-Compatible Webhook
+- Lead Capture Settings with auto-tagging
+- Unified Lead Inbox with source tracking
+- Audit Logging
+
 ## User Choices
 - **Authentication**: JWT-based custom auth (email/password)
 - **Database**: MongoDB (pre-configured in environment)
@@ -15,7 +23,7 @@ Build a full-stack web app called McCare Global ATS – Travel Nurse Recruitment
 ## User Personas
 
 ### Primary Users
-1. **Admin** - Full system access, user management, configuration
+1. **Admin** - Full system access, user management, lead capture configuration
 2. **Recruiter** - Lead pipeline management, candidate sourcing, job matching
 3. **Compliance Officer** - Document verification, credential monitoring
 4. **Scheduler/Placement Coordinator** - Assignment creation, timesheet management
@@ -29,11 +37,21 @@ Build a full-stack web app called McCare Global ATS – Travel Nurse Recruitment
 - 6 distinct user roles with specific permissions
 - Secure password hashing with bcrypt
 
-### Leads & Pipelines (HubSpot-style)
+### Lead Capture System (HubSpot-like)
+- Built-in embeddable lead capture form (HTML/JS snippet)
+- Public API endpoint for third-party integrations
+- HubSpot-compatible webhook for form submissions
+- Landing page submission endpoint
+- UTM parameter tracking (source, medium, campaign, term, content)
+- Auto-tagging rules based on field values
+- Audit logging for all lead intake
+- Unified lead inbox with color-coded source badges
+
+### Leads & Pipelines
 - Kanban board with 8 pipeline stages
 - Lead card with contact info, specialty, source, tags
 - Convert lead to candidate functionality
-- HubSpot webhook endpoint prepared for integration
+- Color-coded source badges (HubSpot, ATS Form, API, Landing Page, etc.)
 
 ### Candidate/Nurse Management
 - Complete nurse profiles (personal, professional, licensing)
@@ -80,12 +98,19 @@ Build a full-stack web app called McCare Global ATS – Travel Nurse Recruitment
 - ✅ Compliance/expiring documents endpoint
 - ✅ Invoices/billing summary endpoint
 - ✅ Database seeding with demo data
-- ✅ HubSpot webhook endpoint (prepared)
+- ✅ **NEW: Public Lead Submission API (no auth required)**
+- ✅ **NEW: ATS Form Submission Endpoint**
+- ✅ **NEW: Enhanced HubSpot Webhook with UTM tracking**
+- ✅ **NEW: Landing Page Submission Endpoint**
+- ✅ **NEW: Lead Capture Settings API**
+- ✅ **NEW: Lead Audit Log API**
+- ✅ **NEW: Lead Intake Statistics API**
+- ✅ **NEW: Embeddable Form Code Generator**
 
 ### Frontend (React + Tailwind + Shadcn UI)
 - ✅ Login page with demo credentials display
 - ✅ Dashboard with stats tiles and charts
-- ✅ Leads page with Kanban board
+- ✅ Leads page with Kanban board and color-coded source badges
 - ✅ Candidates page with table and filters
 - ✅ Candidate detail page with tabs
 - ✅ Compliance dashboard with expiry tracking
@@ -94,6 +119,11 @@ Build a full-stack web app called McCare Global ATS – Travel Nurse Recruitment
 - ✅ Timesheets page with approval workflow
 - ✅ Reports page with analytics
 - ✅ Settings page with user management
+- ✅ **NEW: Lead Capture Settings Page with 4 tabs:**
+  - Settings: Pipeline config, auto-tagging rules, auto-convert toggle
+  - Embed Form: Copy-paste embeddable form code
+  - API Endpoints: All 4 public endpoints with copy buttons
+  - Audit Log: Track all lead submissions with source/tags
 
 ### Documentation
 - ✅ USER_GUIDE.md - Complete workflow documentation
@@ -101,17 +131,37 @@ Build a full-stack web app called McCare Global ATS – Travel Nurse Recruitment
 
 ### Demo Data Seeded
 - 6 users (one per role)
-- 16 leads across pipeline stages
+- 16+ leads across pipeline stages with diverse sources
 - 10 candidates with various specialties
 - 60 documents with different statuses
 - 6 facilities across Canada
 - 4 job orders
 - 3 active assignments
 - 9 timesheets
+- Lead capture settings with auto-tagging rules
+- Lead audit logs for all seeded leads
+
+## API Endpoints - Lead Capture System
+
+### Public Endpoints (No Authentication Required)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/public/leads` | POST | Submit lead from external integrations |
+| `/api/public/form-submit` | POST | Submit lead from ATS embedded form |
+| `/api/public/landing-page` | POST | Submit lead from custom landing pages |
+| `/api/webhooks/hubspot` | POST | Receive leads from HubSpot webhooks |
+
+### Admin Endpoints (Authentication Required)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/lead-capture/settings` | GET/PUT | Get/Update lead capture settings |
+| `/api/lead-capture/embed-code` | GET | Get embeddable form HTML/JS code |
+| `/api/lead-audit-logs` | GET | Get lead intake audit logs |
+| `/api/lead-intake/stats` | GET | Get lead intake statistics by source |
 
 ## Prioritized Backlog
 
-### P0 (Critical - Must Have)
+### P0 (Critical - Must Have) ✅ COMPLETE
 - [x] Authentication system
 - [x] Leads pipeline
 - [x] Candidate management
@@ -120,9 +170,10 @@ Build a full-stack web app called McCare Global ATS – Travel Nurse Recruitment
 - [x] Assignments
 - [x] Timesheets
 - [x] Dashboard
+- [x] **Lead Capture System**
 
 ### P1 (High Priority - Should Have)
-- [ ] Real HubSpot API integration
+- [ ] Real HubSpot API integration (with API keys)
 - [ ] Email notifications for expiring credentials
 - [ ] Document file upload (currently URL-based)
 - [ ] Advanced search/filtering
@@ -139,13 +190,13 @@ Build a full-stack web app called McCare Global ATS – Travel Nurse Recruitment
 - [ ] Advanced analytics/reporting
 - [ ] Integration with payroll systems
 - [ ] Multi-tenancy support
-- [ ] Audit logging
+- [ ] Audit logging (full system)
 - [ ] Custom workflow builder
 
 ## Next Tasks List
-1. Add real HubSpot API integration for lead sync
-2. Implement document file upload with storage
-3. Add email notifications for compliance alerts
+1. ~~Add built-in lead capture capabilities~~ ✅ DONE
+2. Add email notifications for new lead alerts
+3. Implement document file upload with storage
 4. Build candidate self-service portal
 5. Add advanced filtering and search capabilities
 6. Implement calendar view for assignments
