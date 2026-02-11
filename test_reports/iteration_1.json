@@ -1,0 +1,50 @@
+{
+  "summary": "Completed comprehensive testing of McCare Global ATS Lead Capture system with HubSpot-like lead intake capabilities. Backend APIs working perfectly (100% success rate), frontend mostly functional with one minor embed code display issue.",
+  
+  "backend_issues": {
+    "critical_bugs": [],
+    "flaky_endpoints": []
+  },
+  
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "LeadCaptureSettingsPage - Embed Form Tab",
+        "issue": "Embed code textarea appears empty despite backend API returning correct embed code",
+        "selector": "textarea (in Embed Form tab)",
+        "fix_priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "issues": ["Chart dimension warnings in console - width/height calculation issues"],
+        "affected_screen": ["Lead Capture page statistics cards"]
+      }
+    ]
+  },
+  
+  "passed_tests": [
+    "All 4 public API endpoints (POST /api/public/leads, /api/public/form-submit, /api/webhooks/hubspot, /api/public/landing-page)",
+    "Admin authentication and authorization",
+    "Lead Capture Settings endpoint and UI tab",
+    "API Endpoints tab showing all 4 required endpoints", 
+    "Audit Log functionality with proper lead intake tracking",
+    "Leads Pipeline Kanban board with color-coded source badges",
+    "Lead creation form and integration",
+    "Auto-tagging rules configuration and display",
+    "Lead intake statistics and source distribution",
+    "Cross-source lead visibility in unified pipeline"
+  ],
+  
+  "test_report_links": ["/app/backend_test.py"],
+  
+  "success_percentage": "Backend: 100% (10/10 tests passed), Frontend: 95% (1 minor UI issue)",
+  
+  "action_item_for_main_agent": "Fix embed code display issue in LeadCaptureSettingsPage - the backend API returns correct embed code but frontend textarea shows empty. Check React state management and data binding for embed code in the Embed Form tab.",
+  
+  "updated_files": ["/app/backend_test.py"],
+  
+  "should_call_test_agent_after_fix": "false",
+  "should_main_agent_test_itself": "true"
+}
