@@ -1,0 +1,130 @@
+{
+  "brand_identity": {
+    "name": "McCare Global ATS",
+    "tagline": "Your Global Partner in Healthcare Opportunities",
+    "tone": "Professional, Clinical, Efficient, Trustworthy",
+    "archetype": "The Performance Pro (Healthcare Edition)",
+    "aesthetic": "Clean, High-White Space, Clinical Precision"
+  },
+  "typography": {
+    "font_family_heading": "\"Manrope\", sans-serif",
+    "font_family_body": "\"Inter\", sans-serif",
+    "scale": {
+      "h1": "text-4xl font-bold tracking-tight",
+      "h2": "text-3xl font-bold tracking-tight",
+      "h3": "text-2xl font-semibold tracking-tight",
+      "body_lg": "text-lg leading-relaxed",
+      "body_base": "text-base leading-normal",
+      "caption": "text-sm text-muted-foreground"
+    },
+    "weights": {
+      "heading": "font-bold",
+      "body": "font-normal",
+      "label": "font-medium"
+    }
+  },
+  "colors": {
+    "primary": {
+      "DEFAULT": "#ff0000",
+      "foreground": "#ffffff",
+      "50": "#fff0f0",
+      "100": "#ffdede",
+      "200": "#ffc2c2",
+      "300": "#ff9696",
+      "400": "#ff5c5c",
+      "500": "#ff2e2e",
+      "600": "#ed0000",
+      "700": "#c70000",
+      "800": "#a30505",
+      "900": "#870b0b",
+      "950": "#4a0000"
+    },
+    "secondary": {
+      "DEFAULT": "#008080",
+      "foreground": "#ffffff",
+      "50": "#f0fafa",
+      "100": "#d6f0f0",
+      "200": "#aedede",
+      "300": "#7ec2c2",
+      "400": "#4da1a1",
+      "500": "#2d8585",
+      "600": "#216b6b",
+      "700": "#1d5656",
+      "800": "#1b4646",
+      "900": "#1a3b3b",
+      "950": "#0d2424"
+    },
+    "neutral": {
+      "DEFAULT": "#64748b",
+      "background": "#f8fafc",
+      "surface": "#ffffff",
+      "border": "#e2e8f0"
+    },
+    "semantic": {
+      "success": "#10b981",
+      "warning": "#f59e0b",
+      "error": "#ef4444",
+      "info": "#3b82f6"
+    }
+  },
+  "layout_system": {
+    "container": "max-w-[1600px] mx-auto p-6",
+    "grid_dashboard": "grid grid-cols-1 md:grid-cols-4 gap-6",
+    "sidebar_width": "w-64",
+    "spacing": {
+      "section_gap": "gap-8",
+      "card_padding": "p-6",
+      "element_gap": "gap-4"
+    },
+    "border_radius": "rounded-lg"
+  },
+  "component_guidelines": {
+    "buttons": {
+      "primary": "bg-[#ff0000] hover:bg-[#d60000] text-white shadow-sm font-medium rounded-md px-4 py-2 transition-all duration-200",
+      "secondary": "bg-white border border-gray-200 text-gray-900 hover:bg-gray-50 shadow-sm font-medium rounded-md px-4 py-2 transition-all duration-200",
+      "ghost": "hover:bg-gray-100 text-gray-700 font-medium rounded-md px-4 py-2 transition-all duration-200"
+    },
+    "cards": {
+      "base": "bg-white border border-gray-100 shadow-sm rounded-xl p-6 hover:shadow-md transition-shadow duration-200",
+      "interactive": "cursor-pointer hover:border-red-200 hover:shadow-md transition-all duration-200"
+    },
+    "inputs": {
+      "base": "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0000] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+    },
+    "status_badges": {
+      "active": "bg-teal-50 text-teal-700 border border-teal-200 rounded-full px-2.5 py-0.5 text-xs font-medium",
+      "pending": "bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2.5 py-0.5 text-xs font-medium",
+      "critical": "bg-red-50 text-red-700 border border-red-200 rounded-full px-2.5 py-0.5 text-xs font-medium",
+      "neutral": "bg-slate-100 text-slate-700 border border-slate-200 rounded-full px-2.5 py-0.5 text-xs font-medium"
+    }
+  },
+  "assets": {
+    "images": {
+      "nurse_portrait_1": "https://images.unsplash.com/photo-1758204054877-fb1c7ba85ea1?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "nurse_portrait_2": "https://images.unsplash.com/photo-1758691462615-beafbf50bf3c?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "nurse_group": "https://images.unsplash.com/photo-1758575514487-0390fcacc339?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "hospital_building": "https://images.unsplash.com/photo-1769698678497-c41f0ab47c3e?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "medical_meeting": "https://images.unsplash.com/photo-1722347315176-e8670e916a70?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "doctor_portrait": "https://images.unsplash.com/photo-1612349316228-5942a9b489c2?crop=entropy&cs=srgb&fm=jpg&q=85"
+    },
+    "icons_library": "lucide-react"
+  },
+  "instructions_to_main_agent": [
+    "Follow the 'Performance Pro' archetype: Efficient, fast, precise.",
+    "Use Red (#ff0000) sparingly but boldly for CTAs and critical alerts.",
+    "Use Teal (#008080) for healthcare-related positive states (Licensed, Active, Filled).",
+    "Dashboard Layout: Use a 'Bento Grid' approach. 4 columns on desktop.",
+    "Compliance Section: Use a table with clear red/amber/green indicators for document expiration.",
+    "Kanban Board: Ensure columns have distinct background colors (slate-50) to separate them from the white page bg.",
+    "Nav: Left Sidebar, fixed width (w-64), dark or light mode based on preference (suggest Light mode with slate-900 text for professionalism).",
+    "Charts: Use Recharts. Style them minimal. No 3D charts.",
+    "Forms: Use Shadcn Form components. Split long forms into Tabs or Steps (e.g., Candidate Profile)."
+  ],
+  "universal_guidelines": [
+    "Do not use gradients for backgrounds. Use flat, clean colors.",
+    "Ensure 3:1 contrast for all text. Red on White is tricky - check legibility.",
+    "Spacing: Use 'p-6' or 'p-8' for containers. Don't crowd data.",
+    "Micro-interactions: Hover states on table rows (bg-slate-50).",
+    "Animations: 'transition-all duration-200' on buttons and cards."
+  ]
+}
