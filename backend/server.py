@@ -94,6 +94,64 @@ class LeadUpdate(BaseModel):
     stage: Optional[str] = None
     recruiter_id: Optional[str] = None
 
+# Public Lead Submission (no auth required)
+class PublicLeadSubmission(BaseModel):
+    first_name: str
+    last_name: str
+    email: EmailStr
+    phone: Optional[str] = None
+    specialty: Optional[str] = None
+    province_preference: Optional[str] = None
+    notes: Optional[str] = None
+    # UTM/Campaign tracking
+    utm_source: Optional[str] = None
+    utm_medium: Optional[str] = None
+    utm_campaign: Optional[str] = None
+    utm_term: Optional[str] = None
+    utm_content: Optional[str] = None
+    # Form metadata
+    form_id: Optional[str] = None
+    landing_page_url: Optional[str] = None
+    referrer_url: Optional[str] = None
+
+# Lead Capture Settings Model
+class AutoTagRule(BaseModel):
+    field: str  # e.g., "province_preference"
+    value: str  # e.g., "Ontario"
+    tag: str    # e.g., "ontario-lead"
+
+class LeadCaptureSettings(BaseModel):
+    required_fields: List[str] = ["first_name", "last_name", "email"]
+    optional_fields: List[str] = ["phone", "specialty", "province_preference", "notes"]
+    default_pipeline_stage: str = "New Lead"
+    default_recruiter_id: Optional[str] = None
+    auto_tag_rules: List[AutoTagRule] = []
+    auto_convert_to_candidate: bool = False
+    notify_on_new_lead: bool = True
+    allowed_sources: List[str] = ["ATS Form", "API", "HubSpot", "Website", "Landing Page"]
+
+# HubSpot Webhook Payload
+class HubSpotWebhookPayload(BaseModel):
+    properties: Optional[dict] = None
+    form_id: Optional[str] = None
+    portal_id: Optional[str] = None
+    campaign_name: Optional[str] = None
+    utm_source: Optional[str] = None
+    utm_medium: Optional[str] = None
+    utm_campaign: Optional[str] = None
+
+# Lead Audit Log Entry
+class LeadAuditLogEntry(BaseModel):
+    id: str
+    lead_id: str
+    source: str
+    timestamp: str
+    payload_summary: dict
+    auto_populated_fields: List[str]
+    auto_tags_applied: List[str]
+    recruiter_assigned: Optional[str] = None
+    auto_converted: bool = False
+
 # Candidate Models
 class CandidateCreate(BaseModel):
     first_name: str
