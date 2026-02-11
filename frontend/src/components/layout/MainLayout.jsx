@@ -12,7 +12,8 @@ import {
   BarChart3,
   Settings,
   LogOut,
-  ChevronRight
+  ChevronRight,
+  FormInput
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { Button } from '../ui/button';
@@ -27,6 +28,7 @@ import {
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/leads', label: 'Leads', icon: Users },
+  { path: '/lead-capture', label: 'Lead Capture', icon: FormInput, adminOnly: true },
   { path: '/candidates', label: 'Candidates', icon: UserCheck },
   { path: '/compliance', label: 'Compliance', icon: FileCheck },
   { path: '/clients-jobs', label: 'Clients & Jobs', icon: Building2 },
