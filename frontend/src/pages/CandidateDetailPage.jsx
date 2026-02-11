@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api } from '../App';
 import { toast } from 'sonner';
@@ -11,6 +11,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
+import { Progress } from '../components/ui/progress';
 import {
   Dialog,
   DialogContent,
@@ -35,7 +36,13 @@ import {
   AlertCircle,
   Clock,
   User,
-  Building2
+  Building2,
+  Download,
+  File,
+  Image,
+  FileType,
+  X,
+  RefreshCw
 } from 'lucide-react';
 
 const DOCUMENT_TYPES = [
@@ -44,9 +51,13 @@ const DOCUMENT_TYPES = [
   'Government ID', 'Work Permit', 'Other'
 ];
 
+const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.gif', '.txt'];
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
 const CandidateDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const fileInputRef = useRef(null);
   const [candidate, setCandidate] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [activities, setActivities] = useState([]);
@@ -54,6 +65,7 @@ const CandidateDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDocDialog, setShowDocDialog] = useState(false);
+  const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [formData, setFormData] = useState({});
   const [docFormData, setDocFormData] = useState({
     document_type: '',
@@ -62,6 +74,15 @@ const CandidateDetailPage = () => {
     expiry_date: '',
     notes: ''
   });
+  const [uploadData, setUploadData] = useState({
+    document_type: '',
+    issue_date: '',
+    expiry_date: '',
+    notes: '',
+    file: null
+  });
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
     fetchCandidateData();
@@ -124,6 +145,108 @@ const CandidateDetailPage = () => {
     }
   };
 
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file extension
+    const ext = '.' + file.name.split('.').pop().toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      toast.error(`File type not allowed. Allowed: ${ALLOWED_EXTENSIONS.join(', ')}`);
+      return;
+    }
+
+    // Validate file size
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error(`File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB`);
+      return;
+    }
+
+    setUploadData({ ...uploadData, file });
+  };
+
+  const handleUploadDocument = async (e) => {
+    e.preventDefault();
+    
+    if (!uploadData.file) {
+      toast.error('Please select a file to upload');
+      return;
+    }
+
+    if (!uploadData.document_type) {
+      toast.error('Please select a document type');
+      return;
+    }
+
+    setUploading(true);
+    setUploadProgress(0);
+
+    const formDataObj = new FormData();
+    formDataObj.append('file', uploadData.file);
+    formDataObj.append('candidate_id', id);
+    formDataObj.append('document_type', uploadData.document_type);
+    if (uploadData.issue_date) formDataObj.append('issue_date', uploadData.issue_date);
+    if (uploadData.expiry_date) formDataObj.append('expiry_date', uploadData.expiry_date);
+    if (uploadData.notes) formDataObj.append('notes', uploadData.notes);
+
+    try {
+      // Simulate progress for better UX
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => Math.min(prev + 10, 90));
+      }, 100);
+
+      const response = await api.post('/upload/document', formDataObj, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+
+      toast.success('Document uploaded successfully');
+      setShowUploadDialog(false);
+      setUploadData({ document_type: '', issue_date: '', expiry_date: '', notes: '', file: null });
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      fetchCandidateData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to upload document');
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const handleDownloadDocument = async (docId, fileName) => {
+    try {
+      const response = await api.get(`/documents/${docId}/download`, {
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', fileName || 'document');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error('Failed to download document');
+    }
+  };
+
+  const handleDeleteDocument = async (docId) => {
+    if (!window.confirm('Are you sure you want to delete this document?')) return;
+    try {
+      await api.delete(`/documents/${docId}`);
+      toast.success('Document deleted');
+      fetchCandidateData();
+    } catch (error) {
+      toast.error('Failed to delete document');
+    }
+  };
+
   const handleVerifyDocument = async (docId) => {
     try {
       await api.put(`/documents/${docId}`, { verified_by: 'current_user' });
@@ -153,6 +276,28 @@ const CandidateDetailPage = () => {
       case 'Expired': return 'badge-critical';
       default: return 'badge-neutral';
     }
+  };
+
+  const getFileIcon = (fileType) => {
+    if (!fileType) return <FileText className="w-5 h-5 text-slate-400" />;
+    const type = fileType.toLowerCase();
+    if (['.jpg', '.jpeg', '.png', '.gif'].includes(type)) {
+      return <Image className="w-5 h-5 text-purple-500" />;
+    }
+    if (type === '.pdf') {
+      return <FileType className="w-5 h-5 text-red-500" />;
+    }
+    if (['.doc', '.docx'].includes(type)) {
+      return <FileText className="w-5 h-5 text-blue-500" />;
+    }
+    return <File className="w-5 h-5 text-slate-400" />;
+  };
+
+  const formatFileSize = (bytes) => {
+    if (!bytes) return '-';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   if (loading) {
@@ -207,7 +352,7 @@ const CandidateDetailPage = () => {
       <Tabs defaultValue="overview" className="space-y-6">
         <TabsList>
           <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
-          <TabsTrigger value="documents" data-testid="tab-documents">Documents</TabsTrigger>
+          <TabsTrigger value="documents" data-testid="tab-documents">Documents ({documents.length})</TabsTrigger>
           <TabsTrigger value="activity" data-testid="tab-activity">Activity</TabsTrigger>
           <TabsTrigger value="assignments" data-testid="tab-assignments">Assignments</TabsTrigger>
         </TabsList>
@@ -333,17 +478,24 @@ const CandidateDetailPage = () => {
         <TabsContent value="documents" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-semibold">Documents ({documents.length})</h2>
-            <Button onClick={() => setShowDocDialog(true)} className="bg-red-600 hover:bg-red-700" data-testid="add-document-btn">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Document
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setShowDocDialog(true)} data-testid="add-document-url-btn">
+                <Plus className="w-4 h-4 mr-2" />
+                Add by URL
+              </Button>
+              <Button onClick={() => setShowUploadDialog(true)} className="bg-red-600 hover:bg-red-700" data-testid="upload-document-btn">
+                <Upload className="w-4 h-4 mr-2" />
+                Upload File
+              </Button>
+            </div>
           </div>
           <Card className="border-0 shadow-sm">
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Document Type</TableHead>
+                    <TableHead>Document</TableHead>
+                    <TableHead>File</TableHead>
                     <TableHead>Issue Date</TableHead>
                     <TableHead>Expiry Date</TableHead>
                     <TableHead>Status</TableHead>
@@ -353,7 +505,22 @@ const CandidateDetailPage = () => {
                 <TableBody>
                   {documents.length > 0 ? documents.map((doc) => (
                     <TableRow key={doc.id} className="table-row-hover">
-                      <TableCell className="font-medium">{doc.document_type}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {getFileIcon(doc.file_type)}
+                          <span className="font-medium">{doc.document_type}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {doc.file_name ? (
+                          <div>
+                            <p className="text-sm text-slate-600 truncate max-w-[200px]">{doc.file_name}</p>
+                            <p className="text-xs text-slate-400">{formatFileSize(doc.file_size)}</p>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400">URL only</span>
+                        )}
+                      </TableCell>
                       <TableCell>{doc.issue_date ? new Date(doc.issue_date).toLocaleDateString() : '-'}</TableCell>
                       <TableCell>{doc.expiry_date ? new Date(doc.expiry_date).toLocaleDateString() : '-'}</TableCell>
                       <TableCell>
@@ -362,17 +529,36 @@ const CandidateDetailPage = () => {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        {doc.status === 'Pending' && (
-                          <Button variant="ghost" size="sm" onClick={() => handleVerifyDocument(doc.id)}>
-                            <CheckCircle className="w-4 h-4 mr-1 text-teal-600" />
-                            Verify
+                        <div className="flex justify-end gap-1">
+                          {doc.file_path && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => handleDownloadDocument(doc.id, doc.file_name)}
+                              title="Download"
+                            >
+                              <Download className="w-4 h-4 text-blue-600" />
+                            </Button>
+                          )}
+                          {doc.status === 'Pending' && (
+                            <Button variant="ghost" size="sm" onClick={() => handleVerifyDocument(doc.id)} title="Verify">
+                              <CheckCircle className="w-4 h-4 text-teal-600" />
+                            </Button>
+                          )}
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => handleDeleteDocument(doc.id)}
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500" />
                           </Button>
-                        )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   )) : (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-slate-500">
+                      <TableCell colSpan={6} className="text-center py-8 text-slate-500">
                         No documents uploaded
                       </TableCell>
                     </TableRow>
@@ -517,12 +703,12 @@ const CandidateDetailPage = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Add Document Dialog */}
+      {/* Add Document by URL Dialog */}
       <Dialog open={showDocDialog} onOpenChange={setShowDocDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Document</DialogTitle>
-            <DialogDescription>Upload a new document for this candidate.</DialogDescription>
+            <DialogTitle>Add Document by URL</DialogTitle>
+            <DialogDescription>Link an existing document URL.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleAddDocument} className="space-y-4">
             <div className="space-y-2">
@@ -576,6 +762,135 @@ const CandidateDetailPage = () => {
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowDocDialog(false)}>Cancel</Button>
               <Button type="submit" className="bg-red-600 hover:bg-red-700">Add Document</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Upload Document Dialog */}
+      <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Upload Document</DialogTitle>
+            <DialogDescription>Upload a document file for this candidate.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleUploadDocument} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Document Type *</Label>
+              <Select value={uploadData.document_type} onValueChange={(v) => setUploadData({ ...uploadData, document_type: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DOCUMENT_TYPES.map(t => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* File Upload Zone */}
+            <div className="space-y-2">
+              <Label>File *</Label>
+              <div 
+                className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+                  uploadData.file ? 'border-green-300 bg-green-50' : 'border-slate-300 hover:border-red-300 hover:bg-red-50'
+                }`}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={handleFileSelect}
+                  accept={ALLOWED_EXTENSIONS.join(',')}
+                />
+                {uploadData.file ? (
+                  <div className="flex items-center justify-center gap-3">
+                    {getFileIcon('.' + uploadData.file.name.split('.').pop())}
+                    <div className="text-left">
+                      <p className="text-sm font-medium text-slate-700">{uploadData.file.name}</p>
+                      <p className="text-xs text-slate-500">{formatFileSize(uploadData.file.size)}</p>
+                    </div>
+                    <Button 
+                      type="button"
+                      variant="ghost" 
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setUploadData({ ...uploadData, file: null });
+                        if (fileInputRef.current) fileInputRef.current.value = '';
+                      }}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="w-10 h-10 mx-auto text-slate-400 mb-2" />
+                    <p className="text-sm text-slate-600">Click to select a file</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      PDF, DOC, DOCX, JPG, PNG, GIF, TXT (max 10MB)
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {uploading && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600">Uploading...</span>
+                  <span className="text-slate-600">{uploadProgress}%</span>
+                </div>
+                <Progress value={uploadProgress} className="h-2" />
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Issue Date</Label>
+                <Input
+                  type="date"
+                  value={uploadData.issue_date}
+                  onChange={(e) => setUploadData({ ...uploadData, issue_date: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Expiry Date</Label>
+                <Input
+                  type="date"
+                  value={uploadData.expiry_date}
+                  onChange={(e) => setUploadData({ ...uploadData, expiry_date: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <Textarea
+                value={uploadData.notes}
+                onChange={(e) => setUploadData({ ...uploadData, notes: e.target.value })}
+                rows={2}
+                placeholder="Optional notes about this document"
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowUploadDialog(false)} disabled={uploading}>
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-red-600 hover:bg-red-700" disabled={uploading || !uploadData.file}>
+                {uploading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload
+                  </>
+                )}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
