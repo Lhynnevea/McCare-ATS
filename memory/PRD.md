@@ -250,9 +250,16 @@ storage_provider.py
 - React Router (navigation)
 - Axios (API client)
 
+### Deployment & DevOps
+- **Migration System:** `/app/backend/migrations/` - versioned, safe data migrations
+- **Schema Documentation:** `/app/backend/SCHEMA.md` - full collection schemas
+- **Deployment Guide:** `/app/DEPLOYMENT.md` - deployment checklist and commands
+- **Health Check:** `GET /api/health` - verify deployment status
+
 ### URLs
 - Frontend: https://mccare-ats-hub.preview.emergentagent.com
 - Backend API: https://mccare-ats-hub.preview.emergentagent.com/api
+- Health Check: https://mccare-ats-hub.preview.emergentagent.com/api/health
 
 ---
 *Last Updated: February 12, 2026*
