@@ -256,7 +256,7 @@ const CandidateDetailPage = () => {
 
   const handleVerifyDocument = async (docId) => {
     try {
-      await api.put(`/documents/${docId}`, { verified_by: 'current_user' });
+      await api.put(`/documents/${docId}`, { status: 'Verified' });
       toast.success('Document verified');
       fetchCandidateData();
     } catch (error) {
@@ -280,9 +280,28 @@ const CandidateDetailPage = () => {
       case 'Verified': return 'badge-active';
       case 'Pending': return 'badge-pending';
       case 'Expiring Soon': return 'bg-amber-50 text-amber-700 border border-amber-200';
+      case 'Critical': return 'bg-orange-50 text-orange-700 border border-orange-200';
       case 'Expired': return 'badge-critical';
       default: return 'badge-neutral';
     }
+  };
+
+  const getComplianceStatusBadge = (status) => {
+    const config = {
+      'Fully Compliant': { color: 'bg-green-100 text-green-700 border-green-200', icon: CheckCircle },
+      'Pending Documents': { color: 'bg-blue-100 text-blue-700 border-blue-200', icon: Clock },
+      'Expiring Soon': { color: 'bg-yellow-100 text-yellow-700 border-yellow-200', icon: AlertTriangle },
+      'Expired': { color: 'bg-red-100 text-red-700 border-red-200', icon: XCircle },
+      'Missing Required Documents': { color: 'bg-purple-100 text-purple-700 border-purple-200', icon: FileWarning }
+    };
+    const conf = config[status] || { color: 'bg-slate-100 text-slate-700', icon: Shield };
+    const Icon = conf.icon;
+    return (
+      <Badge className={`${conf.color} border flex items-center gap-1 py-1 px-3`}>
+        <Icon className="w-4 h-4" />
+        {status}
+      </Badge>
+    );
   };
 
   const getFileIcon = (fileType) => {
