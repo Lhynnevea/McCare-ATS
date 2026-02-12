@@ -1487,10 +1487,15 @@ async def replace_document_file(
 
 @api_router.get("/files/{candidate_id}/{filename}")
 async def get_file(candidate_id: str, filename: str, current_user: dict = Depends(get_current_user)):
-    """Serve uploaded files (requires authentication)"""
-    file_path = UPLOAD_DIR / candidate_id / filename
+    """
+    Serve uploaded files (requires authentication).
     
-    if not file_path.exists():
+    Uses the configured StorageProvider to retrieve files.
+    """
+    file_path = f"{candidate_id}/{filename}"
+    
+    # Check if file exists using storage provider
+    if not await storage_provider.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")
     
     # Determine content type
@@ -1507,15 +1512,30 @@ async def get_file(candidate_id: str, filename: str, current_user: dict = Depend
     }
     content_type = content_types.get(ext, 'application/octet-stream')
     
-    return FileResponse(
-        path=file_path,
-        media_type=content_type,
-        filename=filename
-    )
+    # For local storage, use FileResponse for efficiency
+    if isinstance(storage_provider, LocalStorageProvider):
+        full_path = storage_provider.get_full_path(file_path)
+        return FileResponse(
+            path=full_path,
+            media_type=content_type,
+            filename=filename
+        )
+    else:
+        # For cloud storage, stream the content
+        content = await storage_provider.download(file_path)
+        return StreamingResponse(
+            BytesIO(content),
+            media_type=content_type,
+            headers={"Content-Disposition": f"inline; filename={filename}"}
+        )
 
 @api_router.get("/documents/{document_id}/download")
 async def download_document(document_id: str, current_user: dict = Depends(get_current_user)):
-    """Download a document file"""
+    """
+    Download a document file.
+    
+    Uses the configured StorageProvider to retrieve files.
+    """
     document = await db.documents.find_one({"id": document_id}, {"_id": 0})
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -1524,17 +1544,28 @@ async def download_document(document_id: str, current_user: dict = Depends(get_c
     if not file_path_str:
         raise HTTPException(status_code=404, detail="No file associated with this document")
     
-    file_path = UPLOAD_DIR / file_path_str
-    if not file_path.exists():
+    # Check if file exists using storage provider
+    if not await storage_provider.exists(file_path_str):
         raise HTTPException(status_code=404, detail="File not found on server")
     
-    original_filename = document.get("file_name", file_path.name)
+    original_filename = document.get("file_name", Path(file_path_str).name)
     
-    return FileResponse(
-        path=file_path,
-        filename=original_filename,
-        media_type='application/octet-stream'
-    )
+    # For local storage, use FileResponse for efficiency
+    if isinstance(storage_provider, LocalStorageProvider):
+        full_path = storage_provider.get_full_path(file_path_str)
+        return FileResponse(
+            path=full_path,
+            filename=original_filename,
+            media_type='application/octet-stream'
+        )
+    else:
+        # For cloud storage, stream the content
+        content = await storage_provider.download(file_path_str)
+        return StreamingResponse(
+            BytesIO(content),
+            media_type='application/octet-stream',
+            headers={"Content-Disposition": f"attachment; filename={original_filename}"}
+        )
 
 @api_router.get("/upload/stats")
 async def get_upload_stats(current_user: dict = Depends(get_current_user)):
@@ -1546,12 +1577,20 @@ async def get_upload_stats(current_user: dict = Depends(get_current_user)):
     total_docs = await db.documents.count_documents({})
     docs_with_files = await db.documents.count_documents({"file_path": {"$exists": True, "$ne": None}})
     
-    # Calculate total storage used
-    total_size = 0
-    if UPLOAD_DIR.exists():
-        for file_path in UPLOAD_DIR.rglob('*'):
-            if file_path.is_file():
-                total_size += file_path.stat().st_size
+    # Get storage stats from provider
+    storage_stats = {}
+    if isinstance(storage_provider, LocalStorageProvider):
+        storage_stats = storage_provider.get_storage_stats()
+    else:
+        # For cloud providers, calculate from DB
+        total_size = 0
+        async for doc in db.documents.find({"file_size": {"$exists": True}}, {"file_size": 1}):
+            total_size += doc.get("file_size", 0)
+        storage_stats = {
+            "storage_type": storage_provider.__class__.__name__,
+            "total_size_bytes": total_size,
+            "total_size_mb": round(total_size / (1024 * 1024), 2)
+        }
     
     # Get documents by type
     pipeline = [
