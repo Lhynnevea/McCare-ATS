@@ -1325,7 +1325,11 @@ async def upload_document(
     notes: Optional[str] = Form(None),
     current_user: dict = Depends(get_current_user)
 ):
-    """Upload a document file for a candidate"""
+    """
+    Upload a document file for a candidate.
+    
+    Uses the configured StorageProvider (Local for MVP, S3/GCS when credentials available).
+    """
     # Validate file
     ext = validate_file(file)
     
@@ -1337,38 +1341,44 @@ async def upload_document(
     if file_size > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB")
     
-    # Create unique filename
-    doc_id = str(uuid.uuid4())
-    safe_filename = f"{doc_id}{ext}"
+    # Read file content
+    content = await file.read()
     
-    # Create candidate-specific directory
-    candidate_dir = UPLOAD_DIR / candidate_id
-    candidate_dir.mkdir(exist_ok=True)
+    # Determine content type
+    content_types = {
+        '.pdf': 'application/pdf',
+        '.doc': 'application/msword',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.gif': 'image/gif',
+        '.txt': 'text/plain'
+    }
+    content_type = content_types.get(ext, 'application/octet-stream')
     
-    file_path = candidate_dir / safe_filename
-    relative_path = f"{candidate_id}/{safe_filename}"
-    
-    # Save file
+    # Upload using storage provider (Local/S3/GCS based on config)
     try:
-        async with aiofiles.open(file_path, 'wb') as out_file:
-            content = await file.read()
-            await out_file.write(content)
+        storage_result = await storage_provider.upload(
+            content=content,
+            filename=file.filename,
+            folder=candidate_id,
+            content_type=content_type
+        )
     except Exception as e:
-        logger.error(f"File upload error: {e}")
+        logger.error(f"Storage upload error: {e}")
         raise HTTPException(status_code=500, detail="Failed to save file")
     
-    # Get backend URL for file access
-    backend_url = os.environ.get('BACKEND_URL', 'https://mccare-ats-hub.preview.emergentagent.com')
-    file_url = f"{backend_url}/api/files/{relative_path}"
-    
     # Create document record
+    doc_id = storage_result.get("file_id", str(uuid.uuid4()))
     now = datetime.now(timezone.utc).isoformat()
     document_dict = {
         "id": doc_id,
         "candidate_id": candidate_id,
         "document_type": document_type,
-        "file_url": file_url,
-        "file_path": relative_path,
+        "file_url": storage_result["file_url"],
+        "file_path": storage_result["file_path"],
+        "storage_type": storage_result["storage_type"],
         "file_name": file.filename,
         "file_size": file_size,
         "file_type": ext,
@@ -1389,7 +1399,7 @@ async def upload_document(
         "entity_type": "document",
         "entity_id": doc_id,
         "activity_type": "uploaded",
-        "description": f"Document uploaded: {document_type} ({file.filename})",
+        "description": f"Document uploaded: {document_type} ({file.filename}) via {storage_result['storage_type']}",
         "user_id": current_user["id"],
         "created_at": now
     })
