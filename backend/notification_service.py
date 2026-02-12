@@ -19,7 +19,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
 import logging
-from email_provider import get_email_provider, EmailResult
+from email_provider import get_email_provider, EmailResult, reset_email_provider
 
 logger = logging.getLogger(__name__)
 
