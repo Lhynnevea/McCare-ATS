@@ -359,6 +359,7 @@ const CandidateDetailPage = () => {
               <Badge className={`${getStatusBadge(candidate.status)} rounded-full px-2.5 py-0.5 text-xs font-medium`}>
                 {candidate.status}
               </Badge>
+              {compliance && getComplianceStatusBadge(compliance.compliance?.status)}
             </div>
           </div>
         </div>
@@ -373,6 +374,55 @@ const CandidateDetailPage = () => {
           </Button>
         </div>
       </div>
+
+      {/* Compliance Summary Card */}
+      {compliance && (
+        <Card className="border-0 shadow-sm bg-gradient-to-r from-slate-50 to-white">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-slate-600" />
+                  <span className="font-medium text-slate-700">Compliance Overview</span>
+                </div>
+                <div className="flex items-center gap-4 text-sm">
+                  <span className="flex items-center gap-1 text-green-600">
+                    <CheckCircle className="w-4 h-4" />
+                    {compliance.compliance?.verified || 0} Verified
+                  </span>
+                  <span className="flex items-center gap-1 text-yellow-600">
+                    <AlertTriangle className="w-4 h-4" />
+                    {compliance.compliance?.expiring || 0} Expiring
+                  </span>
+                  <span className="flex items-center gap-1 text-blue-600">
+                    <Clock className="w-4 h-4" />
+                    {compliance.compliance?.pending || 0} Pending
+                  </span>
+                  <span className="flex items-center gap-1 text-red-600">
+                    <XCircle className="w-4 h-4" />
+                    {compliance.compliance?.expired || 0} Expired
+                  </span>
+                  {compliance.compliance?.missing_required?.length > 0 && (
+                    <span className="flex items-center gap-1 text-purple-600">
+                      <FileWarning className="w-4 h-4" />
+                      {compliance.compliance.missing_required.length} Missing Required
+                    </span>
+                  )}
+                </div>
+              </div>
+              {getComplianceStatusBadge(compliance.compliance?.status)}
+            </div>
+            {compliance.compliance?.missing_required?.length > 0 && (
+              <div className="mt-3 pt-3 border-t">
+                <p className="text-sm text-purple-700">
+                  <span className="font-medium">Missing Required Documents:</span>{' '}
+                  {compliance.compliance.missing_required.join(', ')}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Tabs */}
       <Tabs defaultValue="overview" className="space-y-6">
