@@ -1645,6 +1645,11 @@ async def upload_document(
     
     Uses the configured StorageProvider (Local for MVP, S3/GCS when credentials available).
     """
+    # Validate candidate exists (data integrity check)
+    candidate = await db.candidates.find_one({"id": candidate_id}, {"_id": 0, "id": 1})
+    if not candidate:
+        raise HTTPException(status_code=400, detail="Invalid candidate_id: Candidate not found")
+    
     # Validate file
     ext = validate_file(file)
     
