@@ -15,6 +15,7 @@ Usage:
     await service.check_expiring_credentials()
 """
 
+import os
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
