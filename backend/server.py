@@ -501,25 +501,62 @@ async def get_lead(lead_id: str, current_user: dict = Depends(get_current_user))
         raise HTTPException(status_code=404, detail="Lead not found")
     return lead
 
+# Valid pipeline stages
+VALID_LEAD_STAGES = [
+    "New Lead",
+    "Contacted",
+    "Screening Scheduled",
+    "Application Submitted",
+    "Interview",
+    "Offer",
+    "Hired",
+    "Rejected"
+]
+
 @api_router.put("/leads/{lead_id}")
 async def update_lead(lead_id: str, lead_update: LeadUpdate, current_user: dict = Depends(get_current_user)):
     update_data = {k: v for k, v in lead_update.model_dump().items() if v is not None}
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    # Validate stage if being updated
+    if "stage" in update_data:
+        new_stage = update_data["stage"]
+        if new_stage not in VALID_LEAD_STAGES:
+            raise HTTPException(status_code=400, detail=f"Invalid stage. Must be one of: {', '.join(VALID_LEAD_STAGES)}")
+    
+    # Get current lead to track stage change
+    current_lead = await db.leads.find_one({"id": lead_id}, {"_id": 0, "stage": 1})
+    if not current_lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    old_stage = current_lead.get("stage")
     
     result = await db.leads.update_one({"id": lead_id}, {"$set": update_data})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Lead not found")
     
     # Log stage change if applicable
-    if "stage" in update_data:
+    if "stage" in update_data and update_data["stage"] != old_stage:
+        # Log to activities
         await db.activities.insert_one({
             "id": str(uuid.uuid4()),
             "entity_type": "lead",
             "entity_id": lead_id,
             "activity_type": "stage_change",
-            "description": f"Stage changed to: {update_data['stage']}",
+            "description": f"Stage changed from '{old_stage}' to '{update_data['stage']}'",
             "user_id": current_user["id"],
             "created_at": datetime.now(timezone.utc).isoformat()
+        })
+        
+        # Log to lead_stage_history for detailed tracking
+        await db.lead_stage_history.insert_one({
+            "id": str(uuid.uuid4()),
+            "lead_id": lead_id,
+            "from_stage": old_stage,
+            "to_stage": update_data["stage"],
+            "changed_by": current_user["id"],
+            "changed_by_name": f"{current_user.get('first_name', '')} {current_user.get('last_name', '')}",
+            "changed_at": datetime.now(timezone.utc).isoformat()
         })
     
     lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
