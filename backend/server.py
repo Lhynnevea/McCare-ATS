@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, Query, UploadFile, File, Form
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, Query, UploadFile, File, Form, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
@@ -22,6 +22,9 @@ from io import BytesIO
 # Import Storage Provider abstraction
 from storage_provider import get_storage_provider, LocalStorageProvider
 
+# Import Notification Service
+from notification_service import NotificationService
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -38,6 +41,9 @@ storage_provider = get_storage_provider()
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
+
+# Initialize notification service
+notification_service = NotificationService(db)
 
 # JWT Settings
 SECRET_KEY = os.environ.get('JWT_SECRET_KEY', secrets.token_hex(32))
