@@ -219,11 +219,33 @@ Build a full-stack web app called McCare Global ATS – Travel Nurse Recruitment
 ## Next Tasks List
 1. ~~Add built-in lead capture capabilities~~ ✅ DONE
 2. ~~Implement document file upload with Storage Provider~~ ✅ DONE (Feb 12)
-3. **Migrate to S3/GCS when cloud credentials available** (P1)
-4. Add email notifications for new lead alerts
-5. Build candidate self-service portal
-6. Add advanced filtering and search capabilities
-7. Implement calendar view for assignments
+3. ~~Add email notifications for leads and credentials~~ ✅ DONE (Feb 12 - Demo mode)
+4. **Migrate to S3/GCS when cloud credentials available** (P1)
+5. **Configure production email provider** (P1 - SendGrid/AWS SES/Mailgun)
+6. Build candidate self-service portal
+7. Add advanced filtering and search capabilities
+8. Implement calendar view for assignments
+
+## Notification System Architecture
+```
+/app/backend/
+├── email_provider.py      # Email abstraction layer
+│   ├── EmailProvider (ABC)
+│   ├── DemoEmailProvider (Active - logs to DB)
+│   ├── SendGridEmailProvider (Ready - needs SENDGRID_API_KEY)
+│   └── AWSESEmailProvider (Ready - needs AWS credentials)
+├── notification_service.py  # Notification business logic
+│   ├── create_notification() - In-app notifications
+│   ├── notify_new_lead() - Triggered on lead creation
+│   └── check_expiring_credentials() - Daily scheduler
+└── migrations/
+    └── m_002_add_notification_collections.py
+
+Collections:
+- notifications: In-app notifications with user_ids, read_by
+- notification_logs: Email audit trail (demo: logged, prod: sent)
+- notification_settings: Admin configuration
+```
 
 ## Storage Provider Architecture
 ```
