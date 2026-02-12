@@ -42,7 +42,11 @@ import {
   Image,
   FileType,
   X,
-  RefreshCw
+  RefreshCw,
+  AlertTriangle,
+  XCircle,
+  FileWarning,
+  Shield
 } from 'lucide-react';
 
 const DOCUMENT_TYPES = [
