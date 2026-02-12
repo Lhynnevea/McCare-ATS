@@ -288,9 +288,9 @@ storage_provider.py
 - **Health Check:** `GET /api/health` - verify deployment status
 
 ### URLs
-- Frontend: https://mccare-ats-hub.preview.emergentagent.com
-- Backend API: https://mccare-ats-hub.preview.emergentagent.com/api
-- Health Check: https://mccare-ats-hub.preview.emergentagent.com/api/health
+- Frontend: https://ats-lead-capture-fix.preview.emergentagent.com
+- Backend API: https://ats-lead-capture-fix.preview.emergentagent.com/api
+- Health Check: https://ats-lead-capture-fix.preview.emergentagent.com/api/health
 
 ---
 *Last Updated: February 12, 2026*
