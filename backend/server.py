@@ -1283,15 +1283,18 @@ async def update_document(document_id: str, document_update: DocumentUpdate, cur
 
 @api_router.delete("/documents/{document_id}")
 async def delete_document(document_id: str, current_user: dict = Depends(get_current_user)):
+    """
+    Delete a document and its associated file.
+    
+    Uses the configured StorageProvider to delete files.
+    """
     # Get document to find file path
     document = await db.documents.find_one({"id": document_id}, {"_id": 0})
     if document:
-        # Delete file if it exists locally
+        # Delete file using storage provider
         file_path = document.get("file_path")
         if file_path:
-            full_path = UPLOAD_DIR / file_path
-            if full_path.exists():
-                full_path.unlink()
+            await storage_provider.delete(file_path)
     
     result = await db.documents.delete_one({"id": document_id})
     if result.deleted_count == 0:
