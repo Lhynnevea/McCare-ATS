@@ -170,6 +170,9 @@ class NotificationService:
         """
         self.db = db
         self.base_url = base_url or "https://mccare-ats-hub.preview.emergentagent.com"
+        # Pass db to ensure DemoEmailProvider can log
+        from email_provider import reset_email_provider
+        reset_email_provider()  # Reset singleton to pick up db
         self.email_provider = get_email_provider(db)
     
     async def get_settings(self) -> dict:
