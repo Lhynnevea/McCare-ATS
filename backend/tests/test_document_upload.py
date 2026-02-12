@@ -195,10 +195,13 @@ class TestDocumentDownload(TestAuthSetup):
         )
         
         docs = list_response.json()
-        if not docs:
-            pytest.skip("No documents available for download test")
+        # Filter for documents that have actual files (not URL-only docs)
+        docs_with_files = [d for d in docs if d.get("file_path")]
         
-        doc_id = docs[0]["id"]
+        if not docs_with_files:
+            pytest.skip("No documents with files available for download test")
+        
+        doc_id = docs_with_files[0]["id"]
         
         response = requests.get(
             f"{BASE_URL}/api/documents/{doc_id}/download",
@@ -358,7 +361,8 @@ class TestCleanup(TestAuthSetup):
         
         if response.status_code == 200:
             docs = response.json()
-            test_docs = [d for d in docs if d.get("notes", "").startswith("Test")]
+            # Handle None notes safely
+            test_docs = [d for d in docs if d.get("notes") and d["notes"].startswith("Test")]
             
             for doc in test_docs:
                 requests.delete(
