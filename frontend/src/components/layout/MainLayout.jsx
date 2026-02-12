@@ -13,7 +13,8 @@ import {
   Settings,
   LogOut,
   ChevronRight,
-  FormInput
+  FormInput,
+  Bell
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { Button } from '../ui/button';
@@ -24,6 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
+import NotificationsDropdown from '../NotificationsDropdown';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -36,6 +38,7 @@ const navItems = [
   { path: '/timesheets', label: 'Timesheets', icon: Clock },
   { path: '/reports', label: 'Reports', icon: BarChart3 },
   { path: '/settings', label: 'Settings', icon: Settings },
+  { path: '/notifications-settings', label: 'Notifications', icon: Bell, adminOnly: true },
 ];
 
 const MainLayout = ({ children }) => {
