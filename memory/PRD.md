@@ -254,11 +254,12 @@ Build a full-stack web app called McCare Global ATS – Travel Nurse Recruitment
 1. ~~Add built-in lead capture capabilities~~ ✅ DONE
 2. ~~Implement document file upload with Storage Provider~~ ✅ DONE (Feb 12)
 3. ~~Add email notifications for leads and credentials~~ ✅ DONE (Feb 12 - Demo mode)
-4. **Migrate to S3/GCS when cloud credentials available** (P1)
-5. **Configure production email provider** (P1 - SendGrid/AWS SES/Mailgun)
-6. Build candidate self-service portal
-7. Add advanced filtering and search capabilities
-8. Implement calendar view for assignments
+4. ~~Enhanced Lead Actions with Convert to Candidate~~ ✅ DONE (Feb 12)
+5. **Migrate to S3/GCS when cloud credentials available** (P1)
+6. **Configure production email provider** (P1 - SendGrid/AWS SES/Mailgun)
+7. Build candidate self-service portal
+8. Add advanced filtering and search capabilities
+9. Implement calendar view for assignments
 
 ## Notification System Architecture
 ```
