@@ -169,7 +169,7 @@ class NotificationService:
             base_url: Base URL for links in emails (defaults to env or preview URL)
         """
         self.db = db
-        self.base_url = base_url or "https://mccare-ats-hub.preview.emergentagent.com"
+        self.base_url = base_url or os.environ.get('BACKEND_URL', '')
         # Pass db to ensure DemoEmailProvider can log
         from email_provider import reset_email_provider
         reset_email_provider()  # Reset singleton to pick up db
