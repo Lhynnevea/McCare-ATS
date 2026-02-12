@@ -55,9 +55,11 @@ const LoginPage = () => {
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-red-600 to-red-700 p-12 flex-col justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-              <HeartPulse className="w-7 h-7 text-white" />
-            </div>
+            <img 
+              src="/logo.png" 
+              alt="McCare Global" 
+              className="h-14 w-auto object-contain"
+            />
             <div>
               <h1 className="text-white font-bold text-2xl">McCare Global</h1>
               <p className="text-red-200 text-sm">Healthcare Services Inc.</p>
@@ -98,9 +100,11 @@ const LoginPage = () => {
         <Card className="w-full max-w-md shadow-xl border-0">
           <CardHeader className="text-center pb-2">
             <div className="lg:hidden flex items-center justify-center gap-2 mb-4">
-              <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center">
-                <HeartPulse className="w-6 h-6 text-white" />
-              </div>
+              <img 
+                src="/logo.png" 
+                alt="McCare Global" 
+                className="h-10 w-auto object-contain"
+              />
               <span className="font-bold text-xl text-slate-900">McCare Global</span>
             </div>
             <CardTitle className="text-2xl font-bold text-slate-900">Welcome</CardTitle>
