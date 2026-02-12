@@ -63,11 +63,13 @@ const MainLayout = ({ children }) => {
       {/* Sidebar */}
       <aside className="w-64 bg-white border-r border-slate-200 flex flex-col fixed h-full" data-testid="sidebar">
         {/* Logo */}
-        <div className="p-6 border-b border-slate-100">
+        <div className="p-4 border-b border-slate-100">
           <Link to="/dashboard" className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-lg">M</span>
-            </div>
+            <img 
+              src="/logo.png" 
+              alt="McCare Global" 
+              className="h-10 w-auto object-contain"
+            />
             <div>
               <h1 className="font-bold text-slate-900 text-lg leading-tight">McCare</h1>
               <p className="text-xs text-slate-500">Global ATS</p>
