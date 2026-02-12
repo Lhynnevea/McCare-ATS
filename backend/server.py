@@ -764,11 +764,19 @@ async def process_lead_intake(lead_data: dict, source: str) -> dict:
 
 # Public Lead Submission Endpoint (No Auth Required)
 @api_router.post("/public/leads")
-async def submit_public_lead(lead: PublicLeadSubmission):
+async def submit_public_lead(lead: PublicLeadSubmission, request: Request):
     """
     Public endpoint for submitting leads from external websites and forms.
     No authentication required. Can be called from landing pages, embedded forms, etc.
     """
+    # Log the intake attempt
+    log_entry = await log_lead_intake(
+        request=request,
+        form_id="public-api",
+        payload=lead.model_dump(),
+        source="API"
+    )
+    
     try:
         lead_data = lead.model_dump()
         lead_data["source"] = "API"
@@ -791,53 +799,145 @@ async def submit_public_lead(lead: PublicLeadSubmission):
                 auto_converted=False
             )
             
+            # Update log entry
+            await update_lead_intake_log(log_entry["id"], "success", lead_id=existing["id"])
+            
             return {"status": "updated", "lead_id": existing["id"], "message": "Lead updated with new information"}
         
         result = await process_lead_intake(lead_data, "API")
+        
+        # Update log entry
+        await update_lead_intake_log(log_entry["id"], "success", lead_id=result["id"])
+        
         return {"status": "success", "lead_id": result["id"], "auto_converted": result.get("auto_converted", False)}
     except Exception as e:
         logger.error(f"Public lead submission error: {e}")
+        await update_lead_intake_log(log_entry["id"], "error", error=str(e))
         raise HTTPException(status_code=400, detail=str(e))
+
+# OPTIONS handler for CORS preflight on public endpoints
+@api_router.options("/public/form-submit")
+async def form_submit_options():
+    """Handle CORS preflight for embedded form submissions"""
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Accept, Origin",
+            "Access-Control-Max-Age": "86400",
+        }
+    )
+
+@api_router.options("/public/leads")
+async def public_leads_options():
+    """Handle CORS preflight for public lead submissions"""
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Accept, Origin",
+            "Access-Control-Max-Age": "86400",
+        }
+    )
 
 # Built-in ATS Form Submission Endpoint
 @api_router.post("/public/form-submit")
-async def submit_form_lead(payload: dict):
+async def submit_form_lead(request: Request, payload: dict):
     """
     Endpoint for the built-in ATS lead capture form.
     Accepts form data and creates a lead with "ATS Form" source.
+    
+    Expected fields:
+    - first_name (required)
+    - last_name (required)
+    - email (required)
+    - phone
+    - specialty
+    - province_preference
+    - notes
+    - utm_source, utm_medium, utm_campaign
+    - landing_page_url, referrer_url
+    - form_id
     """
+    # Log the intake attempt
+    log_entry = await log_lead_intake(
+        request=request,
+        form_id=payload.get("form_id", "ats-embedded-form"),
+        payload=payload,
+        source="ATS Form"
+    )
+    
     try:
+        # Validate required fields
+        email = payload.get("email", "").strip()
+        if not email:
+            error_msg = "Email is required"
+            await update_lead_intake_log(log_entry["id"], "validation_error", error=error_msg)
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "detail": error_msg}
+            )
+        
+        first_name = payload.get("first_name", payload.get("firstName", "")).strip()
+        last_name = payload.get("last_name", payload.get("lastName", "")).strip()
+        
+        if not first_name or not last_name:
+            error_msg = "First name and last name are required"
+            await update_lead_intake_log(log_entry["id"], "validation_error", error=error_msg)
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "detail": error_msg}
+            )
+        
         lead_data = {
-            "first_name": payload.get("first_name", payload.get("firstName", "")),
-            "last_name": payload.get("last_name", payload.get("lastName", "")),
-            "email": payload.get("email", ""),
-            "phone": payload.get("phone", ""),
-            "specialty": payload.get("specialty", payload.get("specialization", "")),
-            "province_preference": payload.get("province_preference", payload.get("province", "")),
-            "notes": payload.get("notes", payload.get("message", "")),
+            "first_name": first_name,
+            "last_name": last_name,
+            "email": email,
+            "phone": payload.get("phone", "").strip(),
+            "specialty": payload.get("specialty", payload.get("specialization", "")).strip(),
+            "province_preference": payload.get("province_preference", payload.get("province", "")).strip(),
+            "notes": payload.get("notes", payload.get("message", "")).strip(),
             "utm_source": payload.get("utm_source"),
             "utm_medium": payload.get("utm_medium"),
             "utm_campaign": payload.get("utm_campaign"),
-            "form_id": payload.get("form_id", "ats-default-form"),
+            "form_id": payload.get("form_id", "ats-embedded-form"),
             "landing_page_url": payload.get("landing_page_url"),
             "referrer_url": payload.get("referrer_url"),
         }
         
-        if not lead_data["email"]:
-            raise HTTPException(status_code=400, detail="Email is required")
+        logger.info(f"Processing form submission: email={email}, form_id={lead_data['form_id']}")
         
         result = await process_lead_intake(lead_data, "ATS Form")
-        return {
-            "status": "success", 
-            "lead_id": result["id"],
-            "message": "Thank you! We'll be in touch soon.",
-            "auto_converted": result.get("auto_converted", False)
-        }
-    except HTTPException:
-        raise
+        
+        # Update log entry with success
+        await update_lead_intake_log(log_entry["id"], "success", lead_id=result["id"])
+        
+        logger.info(f"Form submission successful: lead_id={result['id']}")
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success", 
+                "lead_id": result["id"],
+                "message": "Thank you! We'll be in touch soon.",
+                "auto_converted": result.get("auto_converted", False)
+            }
+        )
+    except HTTPException as he:
+        await update_lead_intake_log(log_entry["id"], "error", error=str(he.detail))
+        return JSONResponse(
+            status_code=he.status_code,
+            content={"status": "error", "detail": str(he.detail)}
+        )
     except Exception as e:
-        logger.error(f"Form submission error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"Form submission error: {e}", exc_info=True)
+        await update_lead_intake_log(log_entry["id"], "error", error=str(e))
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "detail": "An error occurred processing your submission. Please try again."}
+        )
 
 # Enhanced HubSpot Webhook Endpoint
 @api_router.post("/webhooks/hubspot")
