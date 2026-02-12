@@ -236,6 +236,10 @@ const LeadCaptureSettingsPage = () => {
             <Activity className="w-4 h-4 mr-2" />
             Audit Log
           </TabsTrigger>
+          <TabsTrigger value="intake-logs" data-testid="tab-intake-logs">
+            <FileText className="w-4 h-4 mr-2" />
+            Debug Logs
+          </TabsTrigger>
         </TabsList>
 
         {/* Settings Tab */}
