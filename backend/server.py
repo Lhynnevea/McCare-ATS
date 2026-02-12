@@ -2485,6 +2485,24 @@ async def seed_database():
 async def root():
     return {"message": "McCare Global ATS API", "version": "1.0.0"}
 
+# Health check endpoint (no auth required)
+@api_router.get("/health")
+async def health_check():
+    """Health check for deployment verification"""
+    try:
+        # Quick DB check
+        await db.command("ping")
+        db_status = "connected"
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+    
+    return {
+        "status": "healthy" if db_status == "connected" else "degraded",
+        "database": db_status,
+        "storage_provider": storage_provider.__class__.__name__,
+        "version": "1.0.0"
+    }
+
 # Include the router
 app.include_router(api_router)
 
