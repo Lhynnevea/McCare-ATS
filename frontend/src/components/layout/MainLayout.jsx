@@ -104,8 +104,11 @@ const MainLayout = ({ children }) => {
           })}
         </nav>
 
-        {/* User section */}
+        {/* User section with notifications */}
         <div className="p-4 border-t border-slate-100">
+          <div className="flex items-center justify-between mb-3">
+            <NotificationsDropdown />
+          </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="w-full justify-start p-2 h-auto" data-testid="user-menu-trigger">
