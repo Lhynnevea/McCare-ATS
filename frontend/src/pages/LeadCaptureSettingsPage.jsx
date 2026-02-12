@@ -648,6 +648,115 @@ const LeadCaptureSettingsPage = () => {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Debug Logs Tab */}
+        <TabsContent value="intake-logs" className="space-y-6">
+          <Card className="border-0 shadow-sm">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-xl">Form Submission Logs</CardTitle>
+                  <CardDescription>Debug log of all form submission attempts</CardDescription>
+                </div>
+                <Button onClick={refreshIntakeLogs} variant="outline" size="sm">
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Refresh
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {/* Summary Stats */}
+              {intakeLogsSummary && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-green-50 rounded-lg p-4">
+                    <p className="text-2xl font-bold text-green-700">{intakeLogsSummary.by_status?.success || 0}</p>
+                    <p className="text-sm text-green-600">Successful</p>
+                  </div>
+                  <div className="bg-red-50 rounded-lg p-4">
+                    <p className="text-2xl font-bold text-red-700">{(intakeLogsSummary.by_status?.error || 0) + (intakeLogsSummary.by_status?.validation_error || 0)}</p>
+                    <p className="text-sm text-red-600">Failed</p>
+                  </div>
+                  <div className="bg-yellow-50 rounded-lg p-4">
+                    <p className="text-2xl font-bold text-yellow-700">{intakeLogsSummary.by_status?.received || 0}</p>
+                    <p className="text-sm text-yellow-600">Pending</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg p-4">
+                    <p className="text-2xl font-bold text-slate-700">{intakeLogsSummary.total_submissions || 0}</p>
+                    <p className="text-sm text-slate-600">Total</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Recent Errors */}
+              {intakeLogsSummary?.recent_errors?.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="font-medium text-red-700 mb-2">Recent Errors</h4>
+                  <div className="bg-red-50 rounded-lg p-4 space-y-2">
+                    {intakeLogsSummary.recent_errors.map((err, idx) => (
+                      <div key={idx} className="text-sm">
+                        <span className="text-red-600">{err.error}</span>
+                        <span className="text-red-400 text-xs ml-2">
+                          from {err.origin} ({err.form_id})
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Log Table */}
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Form ID</TableHead>
+                    <TableHead>Origin</TableHead>
+                    <TableHead>Error</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {intakeLogs.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-slate-500">
+                        No form submissions yet
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    intakeLogs.map((log) => (
+                      <TableRow key={log.id}>
+                        <TableCell className="text-xs text-slate-500">
+                          {new Date(log.created_at).toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          <Badge 
+                            variant={log.status === 'success' ? 'default' : log.status === 'error' || log.status === 'validation_error' ? 'destructive' : 'secondary'}
+                            className={log.status === 'success' ? 'bg-green-600' : ''}
+                          >
+                            {log.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {log.payload?.email || 'N/A'}
+                        </TableCell>
+                        <TableCell className="text-sm text-slate-500">
+                          {log.form_id}
+                        </TableCell>
+                        <TableCell className="text-xs text-slate-400 max-w-32 truncate">
+                          {log.origin}
+                        </TableCell>
+                        <TableCell className="text-xs text-red-600 max-w-48 truncate">
+                          {log.error || '-'}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* Add Rule Dialog */}
