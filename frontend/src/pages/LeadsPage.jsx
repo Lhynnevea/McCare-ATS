@@ -357,15 +357,16 @@ const LeadsPage = () => {
                         )}
                         {/* Stage change buttons */}
                         <div className="mt-3 flex gap-1 flex-wrap">
-                          {PIPELINE_STAGES.filter(s => s.id !== stage.id).slice(0, 3).map(s => (
+                          {PIPELINE_STAGES.filter(s => s.id !== stage.id).map(s => (
                             <Button
                               key={s.id}
                               variant="ghost"
                               size="sm"
-                              className="text-xs h-6 px-2"
+                              className={`text-xs h-6 px-2 ${s.color.replace('bg-', 'hover:bg-').replace('500', '100')}`}
                               onClick={() => handleStageChange(lead.id, s.id)}
+                              data-testid={`move-to-${s.id.toLowerCase().replace(/\s+/g, '-')}`}
                             >
-                              → {s.id.split(' ')[0]}
+                              → {s.id}
                             </Button>
                           ))}
                         </div>
