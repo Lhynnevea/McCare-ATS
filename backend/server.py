@@ -1161,7 +1161,9 @@ async def get_embed_code(current_user: dict = Depends(get_current_user)):
     if current_user["role"] not in ["Admin", "Recruiter"]:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    backend_url = os.environ.get('BACKEND_URL', 'https://mccare-ats-hub.preview.emergentagent.com')
+    backend_url = os.environ.get('BACKEND_URL', '')
+    if not backend_url:
+        raise HTTPException(status_code=500, detail="BACKEND_URL environment variable not configured")
     
     embed_html = f'''<!-- McCare Global ATS Lead Capture Form -->
 <div id="mccare-lead-form"></div>
