@@ -569,6 +569,31 @@ async def delete_lead(lead_id: str, current_user: dict = Depends(get_current_use
         raise HTTPException(status_code=404, detail="Lead not found")
     return {"message": "Lead deleted successfully"}
 
+@api_router.get("/leads/{lead_id}/stage-history")
+async def get_lead_stage_history(lead_id: str, current_user: dict = Depends(get_current_user)):
+    """Get stage change history for a lead"""
+    history = await db.lead_stage_history.find(
+        {"lead_id": lead_id}, {"_id": 0}
+    ).sort("changed_at", -1).to_list(100)
+    return history
+
+@api_router.get("/pipeline/stages")
+async def get_pipeline_stages(current_user: dict = Depends(get_current_user)):
+    """Get all valid pipeline stages"""
+    return {
+        "stages": VALID_LEAD_STAGES,
+        "stage_config": [
+            {"id": "New Lead", "label": "New Lead", "color": "bg-red-500"},
+            {"id": "Contacted", "label": "Contacted", "color": "bg-orange-500"},
+            {"id": "Screening Scheduled", "label": "Screening Scheduled", "color": "bg-yellow-500"},
+            {"id": "Application Submitted", "label": "Application Submitted", "color": "bg-green-500"},
+            {"id": "Interview", "label": "Interview", "color": "bg-blue-500"},
+            {"id": "Offer", "label": "Offer", "color": "bg-purple-500"},
+            {"id": "Hired", "label": "Hired", "color": "bg-emerald-500"},
+            {"id": "Rejected", "label": "Rejected", "color": "bg-slate-500"}
+        ]
+    }
+
 @api_router.post("/leads/{lead_id}/convert")
 async def convert_lead_to_candidate(lead_id: str, current_user: dict = Depends(get_current_user)):
     lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
