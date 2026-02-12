@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../App';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -17,9 +18,20 @@ import {
   DialogTitle,
 } from '../components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
 import {
@@ -33,7 +45,14 @@ import {
   UserPlus,
   Trash2,
   Edit,
-  GripVertical
+  GripVertical,
+  UserCheck,
+  XCircle,
+  ArrowRight,
+  Users,
+  Link2,
+  AlertTriangle,
+  CheckCircle
 } from 'lucide-react';
 
 const PIPELINE_STAGES = [
@@ -44,6 +63,7 @@ const PIPELINE_STAGES = [
   { id: 'Interview', color: 'bg-indigo-500' },
   { id: 'Offer', color: 'bg-green-500' },
   { id: 'Hired', color: 'bg-teal-500' },
+  { id: 'Converted', color: 'bg-emerald-500' },
   { id: 'Rejected', color: 'bg-red-500' },
 ];
 
@@ -68,14 +88,27 @@ const getSourceBadgeColor = (source) => {
 };
 
 const LeadsPage = () => {
+  const navigate = useNavigate();
   const [leads, setLeads] = useState([]);
+  const [recruiters, setRecruiters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterSpecialty, setFilterSpecialty] = useState('');
   const [filterProvince, setFilterProvince] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const [showMoveStageDialog, setShowMoveStageDialog] = useState(false);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [showConvertDialog, setShowConvertDialog] = useState(false);
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
+  const [duplicateCandidate, setDuplicateCandidate] = useState(null);
+  const [selectedRecruiter, setSelectedRecruiter] = useState('');
+  const [selectedStage, setSelectedStage] = useState('');
+  const [rejectReason, setRejectReason] = useState('');
+  const [postConversionStage, setPostConversionStage] = useState('Converted');
+  const [converting, setConverting] = useState(false);
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -91,6 +124,7 @@ const LeadsPage = () => {
 
   useEffect(() => {
     fetchLeads();
+    fetchRecruiters();
   }, [filterSpecialty, filterProvince]);
 
   const fetchLeads = async () => {
@@ -105,6 +139,15 @@ const LeadsPage = () => {
       toast.error('Failed to fetch leads');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRecruiters = async () => {
+    try {
+      const response = await api.get('/recruiters');
+      setRecruiters(response.data);
+    } catch (error) {
+      console.error('Failed to fetch recruiters:', error);
     }
   };
 
@@ -136,7 +179,6 @@ const LeadsPage = () => {
   };
 
   const handleDeleteLead = async (leadId) => {
-    if (!window.confirm('Are you sure you want to delete this lead?')) return;
     try {
       await api.delete(`/leads/${leadId}`);
       toast.success('Lead deleted successfully');
@@ -146,14 +188,85 @@ const LeadsPage = () => {
     }
   };
 
-  const handleConvertToCandidate = async (leadId) => {
+  const handleAssignRecruiter = async () => {
+    if (!selectedLead || !selectedRecruiter) return;
     try {
-      await api.post(`/leads/${leadId}/convert`);
-      toast.success('Lead converted to candidate');
+      const response = await api.put(`/leads/${selectedLead.id}/assign?recruiter_id=${selectedRecruiter}`);
+      toast.success(`Recruiter ${response.data.recruiter.name} assigned successfully`);
+      setShowAssignDialog(false);
+      setSelectedLead(null);
+      setSelectedRecruiter('');
       fetchLeads();
     } catch (error) {
-      toast.error('Failed to convert lead');
+      toast.error(error.response?.data?.detail || 'Failed to assign recruiter');
     }
+  };
+
+  const handleMoveStage = async () => {
+    if (!selectedLead || !selectedStage) return;
+    try {
+      await api.put(`/leads/${selectedLead.id}`, { stage: selectedStage });
+      toast.success(`Lead moved to ${selectedStage}`);
+      setShowMoveStageDialog(false);
+      setSelectedLead(null);
+      setSelectedStage('');
+      fetchLeads();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to move lead');
+    }
+  };
+
+  const handleRejectLead = async () => {
+    if (!selectedLead) return;
+    try {
+      await api.put(`/leads/${selectedLead.id}/reject?reason=${encodeURIComponent(rejectReason)}`);
+      toast.success('Lead rejected');
+      setShowRejectDialog(false);
+      setSelectedLead(null);
+      setRejectReason('');
+      fetchLeads();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to reject lead');
+    }
+  };
+
+  const handleConvertToCandidate = async (linkToExisting = false, existingCandidateId = null) => {
+    if (!selectedLead) return;
+    setConverting(true);
+    
+    try {
+      const response = await api.post(`/leads/${selectedLead.id}/convert`, {
+        link_to_existing: linkToExisting,
+        existing_candidate_id: existingCandidateId,
+        post_conversion_stage: postConversionStage
+      });
+      
+      if (response.data.status === 'duplicate_found') {
+        // Show duplicate dialog
+        setDuplicateCandidate(response.data.existing_candidate);
+        setShowConvertDialog(false);
+        setShowDuplicateDialog(true);
+      } else if (response.data.status === 'converted' || response.data.status === 'linked') {
+        toast.success(response.data.message);
+        setShowConvertDialog(false);
+        setShowDuplicateDialog(false);
+        setSelectedLead(null);
+        setDuplicateCandidate(null);
+        fetchLeads();
+        
+        // Navigate to candidate profile
+        navigate(`/candidates/${response.data.candidate_id}`);
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to convert lead');
+    } finally {
+      setConverting(false);
+    }
+  };
+
+  const handleLinkToExisting = async () => {
+    if (!selectedLead || !duplicateCandidate) return;
+    await handleConvertToCandidate(true, duplicateCandidate.id);
   };
 
   const handleStageChange = async (leadId, newStage) => {
@@ -181,6 +294,30 @@ const LeadsPage = () => {
       stage: lead.stage || 'New Lead'
     });
     setShowEditDialog(true);
+  };
+
+  const openAssignDialog = (lead) => {
+    setSelectedLead(lead);
+    setSelectedRecruiter(lead.recruiter_id || '');
+    setShowAssignDialog(true);
+  };
+
+  const openMoveStageDialog = (lead) => {
+    setSelectedLead(lead);
+    setSelectedStage(lead.stage || 'New Lead');
+    setShowMoveStageDialog(true);
+  };
+
+  const openRejectDialog = (lead) => {
+    setSelectedLead(lead);
+    setRejectReason('');
+    setShowRejectDialog(true);
+  };
+
+  const openConvertDialog = (lead) => {
+    setSelectedLead(lead);
+    setPostConversionStage('Converted');
+    setShowConvertDialog(true);
   };
 
   const resetForm = () => {
@@ -214,6 +351,15 @@ const LeadsPage = () => {
   const getStageColor = (stage) => {
     const stageConfig = PIPELINE_STAGES.find(s => s.id === stage);
     return stageConfig?.color || 'bg-slate-500';
+  };
+
+  const getRecruiterName = (recruiterId) => {
+    const recruiter = recruiters.find(r => r.id === recruiterId);
+    return recruiter ? `${recruiter.first_name} ${recruiter.last_name}` : 'Unassigned';
+  };
+
+  const isLeadConverted = (lead) => {
+    return lead.stage === 'Converted' || lead.stage === 'Hired' || lead.candidateId;
   };
 
   if (loading) {
@@ -312,27 +458,73 @@ const LeadsPage = () => {
                               )}
                             </div>
                           </div>
+                          
+                          {/* Actions Dropdown Menu */}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" data-testid={`lead-actions-${lead.id}`}>
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => openEditDialog(lead)}>
-                                <Edit className="w-4 h-4 mr-2" /> Edit
+                            <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuItem onClick={() => openEditDialog(lead)} data-testid={`edit-lead-${lead.id}`}>
+                                <Edit className="w-4 h-4 mr-2" /> Edit Lead
                               </DropdownMenuItem>
-                              {stage.id !== 'Hired' && (
-                                <DropdownMenuItem onClick={() => handleConvertToCandidate(lead.id)}>
-                                  <UserPlus className="w-4 h-4 mr-2" /> Convert to Candidate
+                              <DropdownMenuItem onClick={() => openAssignDialog(lead)} data-testid={`assign-recruiter-${lead.id}`}>
+                                <Users className="w-4 h-4 mr-2" /> Assign Recruiter
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openMoveStageDialog(lead)} data-testid={`move-stage-${lead.id}`}>
+                                <ArrowRight className="w-4 h-4 mr-2" /> Move Stage
+                              </DropdownMenuItem>
+                              
+                              <DropdownMenuSeparator />
+                              
+                              {!isLeadConverted(lead) && (
+                                <DropdownMenuItem 
+                                  onClick={() => openConvertDialog(lead)} 
+                                  className="text-emerald-600"
+                                  data-testid={`convert-lead-${lead.id}`}
+                                >
+                                  <UserCheck className="w-4 h-4 mr-2" /> Convert to Candidate
                                 </DropdownMenuItem>
                               )}
-                              <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteLead(lead.id)}>
-                                <Trash2 className="w-4 h-4 mr-2" /> Delete
+                              
+                              {lead.candidateId && (
+                                <DropdownMenuItem 
+                                  onClick={() => navigate(`/candidates/${lead.candidateId}`)}
+                                  className="text-blue-600"
+                                >
+                                  <Link2 className="w-4 h-4 mr-2" /> View Candidate
+                                </DropdownMenuItem>
+                              )}
+                              
+                              {lead.stage !== 'Rejected' && (
+                                <DropdownMenuItem 
+                                  onClick={() => openRejectDialog(lead)} 
+                                  className="text-orange-600"
+                                  data-testid={`reject-lead-${lead.id}`}
+                                >
+                                  <XCircle className="w-4 h-4 mr-2" /> Reject Lead
+                                </DropdownMenuItem>
+                              )}
+                              
+                              <DropdownMenuSeparator />
+                              
+                              <DropdownMenuItem 
+                                className="text-red-600" 
+                                onClick={() => {
+                                  if (window.confirm('Are you sure you want to delete this lead?')) {
+                                    handleDeleteLead(lead.id);
+                                  }
+                                }}
+                                data-testid={`delete-lead-${lead.id}`}
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" /> Delete Lead
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
+                        
                         <div className="space-y-1.5 text-xs text-slate-500">
                           <div className="flex items-center gap-2">
                             <Mail className="w-3 h-3" />
@@ -351,23 +543,31 @@ const LeadsPage = () => {
                             </div>
                           )}
                         </div>
-                        {lead.source && (
-                          <div className="mt-2 pt-2 border-t border-slate-100">
+                        
+                        {/* Recruiter & Source Info */}
+                        <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between flex-wrap gap-1">
+                          {lead.source && (
                             <Badge className={`${getSourceBadgeColor(lead.source)} border text-xs`}>
                               {lead.source}
                             </Badge>
-                          </div>
-                        )}
-                        {/* Stage change buttons */}
+                          )}
+                          {lead.candidateId && (
+                            <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 border text-xs">
+                              <CheckCircle className="w-3 h-3 mr-1" /> Converted
+                            </Badge>
+                          )}
+                        </div>
+                        
+                        {/* Quick Stage Buttons */}
                         <div className="mt-3 flex gap-1 flex-wrap">
-                          {PIPELINE_STAGES.filter(s => s.id !== stage.id).map(s => (
+                          {PIPELINE_STAGES.filter(s => s.id !== stage.id).slice(0, 3).map(s => (
                             <Button
                               key={s.id}
                               variant="ghost"
                               size="sm"
                               className={`text-xs h-6 px-2 ${s.color.replace('bg-', 'hover:bg-').replace('500', '100')}`}
                               onClick={() => handleStageChange(lead.id, s.id)}
-                              data-testid={`move-to-${s.id.toLowerCase().replace(/\s+/g, '-')}`}
+                              data-testid={`quick-move-${lead.id}-${s.id.toLowerCase().replace(/\s+/g, '-')}`}
                             >
                               → {s.id}
                             </Button>
@@ -617,6 +817,207 @@ const LeadsPage = () => {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Assign Recruiter Dialog */}
+      <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Assign Recruiter</DialogTitle>
+            <DialogDescription>
+              Assign a recruiter to {selectedLead?.first_name} {selectedLead?.last_name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Select Recruiter</Label>
+              <Select value={selectedRecruiter} onValueChange={setSelectedRecruiter}>
+                <SelectTrigger data-testid="select-recruiter">
+                  <SelectValue placeholder="Choose a recruiter" />
+                </SelectTrigger>
+                <SelectContent>
+                  {recruiters.map(r => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.first_name} {r.last_name} ({r.role})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAssignDialog(false)}>Cancel</Button>
+            <Button onClick={handleAssignRecruiter} className="bg-red-600 hover:bg-red-700" disabled={!selectedRecruiter}>
+              Assign
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Move Stage Dialog */}
+      <Dialog open={showMoveStageDialog} onOpenChange={setShowMoveStageDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Move to Stage</DialogTitle>
+            <DialogDescription>
+              Move {selectedLead?.first_name} {selectedLead?.last_name} to a different stage
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Select Stage</Label>
+              <Select value={selectedStage} onValueChange={setSelectedStage}>
+                <SelectTrigger data-testid="select-stage">
+                  <SelectValue placeholder="Choose a stage" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PIPELINE_STAGES.map(s => (
+                    <SelectItem key={s.id} value={s.id}>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${s.color}`} />
+                        {s.id}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMoveStageDialog(false)}>Cancel</Button>
+            <Button onClick={handleMoveStage} className="bg-red-600 hover:bg-red-700" disabled={!selectedStage}>
+              Move
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reject Lead Dialog */}
+      <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Reject Lead</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to reject {selectedLead?.first_name} {selectedLead?.last_name}?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="reject-reason">Rejection Reason (Optional)</Label>
+              <Textarea
+                id="reject-reason"
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Enter reason for rejection..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRejectDialog(false)}>Cancel</Button>
+            <Button onClick={handleRejectLead} variant="destructive">
+              Reject Lead
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Convert to Candidate Dialog */}
+      <Dialog open={showConvertDialog} onOpenChange={setShowConvertDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserCheck className="w-5 h-5 text-emerald-600" />
+              Convert to Candidate
+            </DialogTitle>
+            <DialogDescription>
+              Convert {selectedLead?.first_name} {selectedLead?.last_name} into a candidate record
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="p-4 bg-slate-50 rounded-lg space-y-2">
+              <h4 className="font-medium text-sm text-slate-700">Data to be transferred:</h4>
+              <ul className="text-sm text-slate-600 space-y-1">
+                <li>• Name: {selectedLead?.first_name} {selectedLead?.last_name}</li>
+                <li>• Email: {selectedLead?.email}</li>
+                <li>• Phone: {selectedLead?.phone || 'Not provided'}</li>
+                <li>• Specialty: {selectedLead?.specialty || 'Not provided'}</li>
+                <li>• Province: {selectedLead?.province_preference || 'Not provided'}</li>
+              </ul>
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Post-conversion Lead Stage</Label>
+              <Select value={postConversionStage} onValueChange={setPostConversionStage}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Converted">Converted</SelectItem>
+                  <SelectItem value="Hired">Hired</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-500">The lead will be moved to this stage after conversion</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowConvertDialog(false)}>Cancel</Button>
+            <Button 
+              onClick={() => handleConvertToCandidate(false, null)} 
+              className="bg-emerald-600 hover:bg-emerald-700"
+              disabled={converting}
+              data-testid="confirm-convert-btn"
+            >
+              {converting ? 'Converting...' : 'Convert to Candidate'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Duplicate Candidate Found Dialog */}
+      <AlertDialog open={showDuplicateDialog} onOpenChange={setShowDuplicateDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              Duplicate Candidate Found
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-4">
+                <p>A candidate with the email <strong>{selectedLead?.email}</strong> already exists in the system.</p>
+                
+                {duplicateCandidate && (
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                    <h4 className="font-medium text-amber-800 mb-2">Existing Candidate:</h4>
+                    <ul className="text-sm text-amber-700 space-y-1">
+                      <li>Name: {duplicateCandidate.first_name} {duplicateCandidate.last_name}</li>
+                      <li>Email: {duplicateCandidate.email}</li>
+                      <li>Status: {duplicateCandidate.status}</li>
+                      <li>Specialty: {duplicateCandidate.primary_specialty || 'N/A'}</li>
+                    </ul>
+                  </div>
+                )}
+                
+                <p className="text-sm">Would you like to link this lead to the existing candidate instead of creating a duplicate?</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setShowDuplicateDialog(false);
+              setDuplicateCandidate(null);
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleLinkToExisting}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              <Link2 className="w-4 h-4 mr-2" />
+              Link to Existing
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
