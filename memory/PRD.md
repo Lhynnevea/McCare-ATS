@@ -219,8 +219,8 @@ Build a full-stack web app called McCare Global ATS – Travel Nurse Recruitment
 - Axios (API client)
 
 ### URLs
-- Frontend: https://mccare-ats.preview.emergentagent.com
-- Backend API: https://mccare-ats.preview.emergentagent.com/api
+- Frontend: https://mccare-ats-hub.preview.emergentagent.com
+- Backend API: https://mccare-ats-hub.preview.emergentagent.com/api
 
 ---
 *Last Updated: February 11, 2026*

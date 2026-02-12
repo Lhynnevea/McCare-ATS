@@ -968,7 +968,7 @@ async def get_embed_code(current_user: dict = Depends(get_current_user)):
     if current_user["role"] not in ["Admin", "Recruiter"]:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    backend_url = os.environ.get('BACKEND_URL', 'https://mccare-ats.preview.emergentagent.com')
+    backend_url = os.environ.get('BACKEND_URL', 'https://mccare-ats-hub.preview.emergentagent.com')
     
     embed_html = f'''<!-- McCare Global ATS Lead Capture Form -->
 <div id="mccare-lead-form"></div>
@@ -1351,7 +1351,7 @@ async def upload_document(
         raise HTTPException(status_code=500, detail="Failed to save file")
     
     # Get backend URL for file access
-    backend_url = os.environ.get('BACKEND_URL', 'https://mccare-ats.preview.emergentagent.com')
+    backend_url = os.environ.get('BACKEND_URL', 'https://mccare-ats-hub.preview.emergentagent.com')
     file_url = f"{backend_url}/api/files/{relative_path}"
     
     # Create document record
@@ -1438,7 +1438,7 @@ async def replace_document_file(
         logger.error(f"File replacement error: {e}")
         raise HTTPException(status_code=500, detail="Failed to save file")
     
-    backend_url = os.environ.get('BACKEND_URL', 'https://mccare-ats.preview.emergentagent.com')
+    backend_url = os.environ.get('BACKEND_URL', 'https://mccare-ats-hub.preview.emergentagent.com')
     file_url = f"{backend_url}/api/files/{relative_path}"
     
     # Update document record
