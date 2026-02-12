@@ -1,12 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../App';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
+import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import {
   Search,
   Filter,
@@ -16,94 +20,183 @@ import {
   XCircle,
   FileWarning,
   Calendar,
-  User
+  User,
+  Users,
+  FileCheck,
+  ExternalLink,
+  Eye,
+  CheckSquare,
+  RefreshCw,
+  Download,
+  AlertCircle
 } from 'lucide-react';
 
+const DOCUMENT_TYPES = [
+  'Nursing License',
+  'Criminal Record Check',
+  'Immunization Records',
+  'BLS/ACLS',
+  'Resume',
+  'References',
+  'Employment Contract',
+  'Government ID',
+  'Work Permit',
+  'Other'
+];
+
+const STATUS_COLORS = {
+  'Verified': 'bg-green-100 text-green-700 border-green-200',
+  'Pending': 'bg-blue-100 text-blue-700 border-blue-200',
+  'Expiring Soon': 'bg-yellow-100 text-yellow-700 border-yellow-200',
+  'Critical': 'bg-orange-100 text-orange-700 border-orange-200',
+  'Expired': 'bg-red-100 text-red-700 border-red-200',
+  'Fully Compliant': 'bg-green-100 text-green-700 border-green-200',
+  'Pending Documents': 'bg-blue-100 text-blue-700 border-blue-200',
+  'Missing Required Documents': 'bg-purple-100 text-purple-700 border-purple-200'
+};
+
 const CompliancePage = () => {
-  const [expiringDocs, setExpiringDocs] = useState([]);
-  const [allDocuments, setAllDocuments] = useState([]);
+  const navigate = useNavigate();
+  const [documents, setDocuments] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [verifyingDoc, setVerifyingDoc] = useState(null);
+  const [showVerifyDialog, setShowVerifyDialog] = useState(false);
+  
+  // Filters
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterDays, setFilterDays] = useState('30');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterDocType, setFilterDocType] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterDocType, setFilterDocType] = useState('all');
+  const [filterProvince, setFilterProvince] = useState('all');
+  const [activeTab, setActiveTab] = useState('all');
 
   useEffect(() => {
     fetchComplianceData();
-  }, [filterDays]);
+  }, []);
 
   const fetchComplianceData = async () => {
+    setLoading(true);
     try {
-      const [expiringRes, allDocsRes] = await Promise.all([
-        api.get(`/compliance/expiring?days=${filterDays}`),
-        api.get('/documents')
+      const [dashboardRes, summaryRes] = await Promise.all([
+        api.get('/compliance/dashboard'),
+        api.get('/compliance/summary')
       ]);
-      setExpiringDocs(expiringRes.data);
-      setAllDocuments(allDocsRes.data);
+      setDocuments(dashboardRes.data);
+      setSummary(summaryRes.data);
     } catch (error) {
       toast.error('Failed to fetch compliance data');
+      console.error(error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleVerifyDocument = async (docId) => {
+  const handleVerifyDocument = async () => {
+    if (!verifyingDoc) return;
+    
     try {
-      await api.put(`/documents/${docId}`, { verified_by: 'current_user' });
-      toast.success('Document verified');
+      await api.put(`/documents/${verifyingDoc.id}`, { status: 'Verified' });
+      toast.success('Document verified successfully');
+      setShowVerifyDialog(false);
+      setVerifyingDoc(null);
       fetchComplianceData();
     } catch (error) {
       toast.error('Failed to verify document');
     }
   };
 
-  const getStatusBadge = (status, isExpired) => {
-    if (isExpired) return 'badge-critical';
+  const openVerifyDialog = (doc) => {
+    setVerifyingDoc(doc);
+    setShowVerifyDialog(true);
+  };
+
+  // Get unique provinces from documents
+  const provinces = useMemo(() => {
+    const provSet = new Set(documents.map(d => d.candidate_province).filter(Boolean));
+    return Array.from(provSet).sort();
+  }, [documents]);
+
+  // Filter documents based on all criteria
+  const filteredDocuments = useMemo(() => {
+    return documents.filter(doc => {
+      // Tab filter
+      if (activeTab === 'expired' && !doc.is_expired) return false;
+      if (activeTab === 'expiring' && (doc.is_expired || doc.status !== 'Expiring Soon' && doc.status !== 'Critical')) return false;
+      if (activeTab === 'pending' && doc.original_status !== 'Pending') return false;
+      if (activeTab === 'verified' && doc.original_status !== 'Verified') return false;
+      if (activeTab === 'orphan' && !doc.is_orphan) return false;
+      
+      // Status filter
+      if (filterStatus !== 'all' && doc.status !== filterStatus) return false;
+      
+      // Document type filter
+      if (filterDocType !== 'all' && doc.document_type !== filterDocType) return false;
+      
+      // Province filter
+      if (filterProvince !== 'all' && doc.candidate_province !== filterProvince) return false;
+      
+      // Search filter (candidate name or document type)
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchName = doc.candidate_name?.toLowerCase().includes(query);
+        const matchDocType = doc.document_type?.toLowerCase().includes(query);
+        const matchEmail = doc.candidate_email?.toLowerCase().includes(query);
+        if (!matchName && !matchDocType && !matchEmail) return false;
+      }
+      
+      return true;
+    });
+  }, [documents, activeTab, filterStatus, filterDocType, filterProvince, searchQuery]);
+
+  const getStatusBadge = (status, daysRemaining) => {
+    const colorClass = STATUS_COLORS[status] || 'bg-slate-100 text-slate-700';
+    
+    let icon = null;
     switch (status) {
-      case 'Verified': return 'badge-active';
-      case 'Pending': return 'badge-pending';
-      case 'Expiring Soon': return 'bg-amber-50 text-amber-700 border border-amber-200';
-      case 'Expired': return 'badge-critical';
-      default: return 'badge-neutral';
+      case 'Verified':
+      case 'Fully Compliant':
+        icon = <CheckCircle className="w-3 h-3 mr-1" />;
+        break;
+      case 'Pending':
+      case 'Pending Documents':
+        icon = <Clock className="w-3 h-3 mr-1" />;
+        break;
+      case 'Expiring Soon':
+        icon = <AlertTriangle className="w-3 h-3 mr-1" />;
+        break;
+      case 'Critical':
+        icon = <AlertCircle className="w-3 h-3 mr-1" />;
+        break;
+      case 'Expired':
+        icon = <XCircle className="w-3 h-3 mr-1" />;
+        break;
+      case 'Missing Required Documents':
+        icon = <FileWarning className="w-3 h-3 mr-1" />;
+        break;
     }
+    
+    return (
+      <Badge className={`${colorClass} border flex items-center`}>
+        {icon}
+        {status}
+      </Badge>
+    );
   };
 
-  const getStatusIcon = (status, isExpired) => {
-    if (isExpired) return <XCircle className="w-4 h-4 text-red-500" />;
-    switch (status) {
-      case 'Verified': return <CheckCircle className="w-4 h-4 text-teal-500" />;
-      case 'Pending': return <Clock className="w-4 h-4 text-amber-500" />;
-      case 'Expiring Soon': return <AlertTriangle className="w-4 h-4 text-amber-500" />;
-      default: return <FileWarning className="w-4 h-4 text-slate-400" />;
-    }
+  const getDaysRemainingBadge = (days) => {
+    if (days === null || days === undefined) return null;
+    
+    let colorClass = 'bg-green-100 text-green-700';
+    if (days < 0) colorClass = 'bg-red-100 text-red-700';
+    else if (days <= 7) colorClass = 'bg-orange-100 text-orange-700';
+    else if (days <= 30) colorClass = 'bg-yellow-100 text-yellow-700';
+    
+    return (
+      <Badge className={`${colorClass} text-xs`}>
+        {days < 0 ? `${Math.abs(days)}d overdue` : `${days}d left`}
+      </Badge>
+    );
   };
-
-  const getDaysUntilExpiry = (expiryDate) => {
-    if (!expiryDate) return null;
-    const today = new Date();
-    const expiry = new Date(expiryDate);
-    const diffTime = expiry - today;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
-  };
-
-  const filteredDocuments = allDocuments.filter(doc => {
-    if (filterStatus && doc.status !== filterStatus) return false;
-    if (filterDocType && doc.document_type !== filterDocType) return false;
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return doc.document_type.toLowerCase().includes(query);
-    }
-    return true;
-  });
-
-  const documentTypes = [...new Set(allDocuments.map(d => d.document_type))];
-
-  // Summary stats
-  const expiredCount = expiringDocs.filter(d => d.is_expired).length;
-  const expiringCount = expiringDocs.filter(d => !d.is_expired).length;
-  const pendingCount = allDocuments.filter(d => d.status === 'Pending').length;
-  const verifiedCount = allDocuments.filter(d => d.status === 'Verified').length;
 
   if (loading) {
     return (
@@ -119,231 +212,367 @@ const CompliancePage = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Compliance Dashboard</h1>
-          <p className="text-slate-500 mt-1">Monitor document status and expiring credentials</p>
+          <p className="text-slate-500 mt-1">Monitor document status and candidate compliance</p>
         </div>
+        <Button onClick={fetchComplianceData} variant="outline" size="sm">
+          <RefreshCw className="w-4 h-4 mr-2" />
+          Refresh
+        </Button>
       </div>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="border-0 shadow-sm border-l-4 border-l-red-500">
+      {/* Summary Widgets */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <Card 
+          className={`border-0 shadow-sm border-l-4 border-l-slate-500 cursor-pointer hover:shadow-md transition-shadow ${activeTab === 'all' ? 'ring-2 ring-slate-500' : ''}`}
+          onClick={() => setActiveTab('all')}
+          data-testid="summary-total"
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-500">Total Candidates</p>
+                <p className="text-2xl font-bold text-slate-700">{summary?.candidates?.total || 0}</p>
+              </div>
+              <Users className="w-8 h-8 text-slate-200" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card 
+          className={`border-0 shadow-sm border-l-4 border-l-green-500 cursor-pointer hover:shadow-md transition-shadow ${activeTab === 'verified' ? 'ring-2 ring-green-500' : ''}`}
+          onClick={() => setActiveTab('verified')}
+          data-testid="summary-compliant"
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-500">Fully Compliant</p>
+                <p className="text-2xl font-bold text-green-600">{summary?.candidates?.fully_compliant || 0}</p>
+              </div>
+              <CheckCircle className="w-8 h-8 text-green-200" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card 
+          className={`border-0 shadow-sm border-l-4 border-l-yellow-500 cursor-pointer hover:shadow-md transition-shadow ${activeTab === 'expiring' ? 'ring-2 ring-yellow-500' : ''}`}
+          onClick={() => setActiveTab('expiring')}
+          data-testid="summary-expiring"
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-500">Expiring Soon</p>
+                <p className="text-2xl font-bold text-yellow-600">{(summary?.documents?.expiring_soon || 0) + (summary?.documents?.critical || 0)}</p>
+              </div>
+              <AlertTriangle className="w-8 h-8 text-yellow-200" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card 
+          className={`border-0 shadow-sm border-l-4 border-l-red-500 cursor-pointer hover:shadow-md transition-shadow ${activeTab === 'expired' ? 'ring-2 ring-red-500' : ''}`}
+          onClick={() => setActiveTab('expired')}
+          data-testid="summary-expired"
+        >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-500">Expired</p>
-                <p className="text-2xl font-bold text-red-600">{expiredCount}</p>
+                <p className="text-2xl font-bold text-red-600">{summary?.documents?.expired || 0}</p>
               </div>
               <XCircle className="w-8 h-8 text-red-200" />
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-sm border-l-4 border-l-amber-500">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-500">Expiring Soon</p>
-                <p className="text-2xl font-bold text-amber-600">{expiringCount}</p>
-              </div>
-              <AlertTriangle className="w-8 h-8 text-amber-200" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm border-l-4 border-l-blue-500">
+
+        <Card 
+          className={`border-0 shadow-sm border-l-4 border-l-purple-500 cursor-pointer hover:shadow-md transition-shadow ${activeTab === 'pending' ? 'ring-2 ring-purple-500' : ''}`}
+          onClick={() => setActiveTab('pending')}
+          data-testid="summary-pending"
+        >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-slate-500">Pending Review</p>
-                <p className="text-2xl font-bold text-blue-600">{pendingCount}</p>
+                <p className="text-2xl font-bold text-purple-600">{summary?.documents?.pending || 0}</p>
               </div>
-              <Clock className="w-8 h-8 text-blue-200" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm border-l-4 border-l-teal-500">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-500">Verified</p>
-                <p className="text-2xl font-bold text-teal-600">{verifiedCount}</p>
-              </div>
-              <CheckCircle className="w-8 h-8 text-teal-200" />
+              <Clock className="w-8 h-8 text-purple-200" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Expiring Documents Alert */}
-      {expiringDocs.length > 0 && (
-        <Card className="border-0 shadow-sm bg-red-50 border border-red-100">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex items-center gap-2 text-red-700">
-              <AlertTriangle className="w-5 h-5" />
-              Documents Requiring Attention ({expiringDocs.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-4 mb-4">
-              <span className="text-sm text-red-600">Show documents expiring within:</span>
-              <Select value={filterDays} onValueChange={setFilterDays}>
-                <SelectTrigger className="w-[140px] bg-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="30">30 days</SelectItem>
-                  <SelectItem value="60">60 days</SelectItem>
-                  <SelectItem value="90">90 days</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="bg-white rounded-lg overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Candidate</TableHead>
-                    <TableHead>Document Type</TableHead>
-                    <TableHead>Expiry Date</TableHead>
-                    <TableHead>Days Remaining</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {expiringDocs.map((doc) => {
-                    const daysRemaining = getDaysUntilExpiry(doc.expiry_date);
-                    return (
-                      <TableRow key={doc.id} className="table-row-hover">
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <User className="w-4 h-4 text-slate-400" />
-                            <span className="font-medium">{doc.candidate_name}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>{doc.document_type}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Calendar className="w-4 h-4 text-slate-400" />
-                            {new Date(doc.expiry_date).toLocaleDateString()}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <span className={`font-medium ${daysRemaining <= 0 ? 'text-red-600' : daysRemaining <= 14 ? 'text-amber-600' : 'text-slate-600'}`}>
-                            {daysRemaining <= 0 ? `${Math.abs(daysRemaining)} days overdue` : `${daysRemaining} days`}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {getStatusIcon(doc.status, doc.is_expired)}
-                            <Badge className={`${getStatusBadge(doc.status, doc.is_expired)} rounded-full px-2.5 py-0.5 text-xs font-medium`}>
-                              {doc.is_expired ? 'Expired' : doc.status}
-                            </Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {doc.status === 'Pending' && (
-                            <Button variant="outline" size="sm" onClick={() => handleVerifyDocument(doc.id)}>
-                              <CheckCircle className="w-4 h-4 mr-1" />
-                              Verify
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+      {/* Data Integrity Warning */}
+      {summary?.documents?.orphan > 0 && (
+        <Card className="border-orange-200 bg-orange-50">
+          <CardContent className="p-4 flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-orange-600" />
+            <div>
+              <p className="font-medium text-orange-800">Data Integrity Issue</p>
+              <p className="text-sm text-orange-700">
+                {summary.documents.orphan} document(s) found without a linked candidate. 
+                <Button 
+                  variant="link" 
+                  className="text-orange-700 underline p-0 h-auto ml-1"
+                  onClick={() => setActiveTab('orphan')}
+                >
+                  View orphan records
+                </Button>
+              </p>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* All Documents */}
+      {/* Filters */}
       <Card className="border-0 shadow-sm">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg">All Documents</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-4 mb-4">
-            <div className="flex-1 min-w-[200px]">
+        <CardContent className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="md:col-span-2">
+              <Label className="text-xs text-slate-500 mb-1 block">Search Candidate / Document</Label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
                 <Input
-                  placeholder="Search documents..."
+                  placeholder="Search by name, email, or document type..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
-                  data-testid="search-documents-input"
+                  data-testid="search-input"
                 />
               </div>
             </div>
-            <Select value={filterStatus || "all"} onValueChange={(v) => setFilterStatus(v === "all" ? "" : v)}>
-              <SelectTrigger className="w-[160px]">
-                <Filter className="w-4 h-4 mr-2" />
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="Verified">Verified</SelectItem>
-                <SelectItem value="Pending">Pending</SelectItem>
-                <SelectItem value="Expiring Soon">Expiring Soon</SelectItem>
-                <SelectItem value="Expired">Expired</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filterDocType || "all"} onValueChange={(v) => setFilterDocType(v === "all" ? "" : v)}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Document Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                {documentTypes.map(t => (
-                  <SelectItem key={t} value={t}>{t}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            
+            <div>
+              <Label className="text-xs text-slate-500 mb-1 block">Status</Label>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger data-testid="filter-status">
+                  <SelectValue placeholder="All Statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="Verified">Verified</SelectItem>
+                  <SelectItem value="Pending">Pending</SelectItem>
+                  <SelectItem value="Expiring Soon">Expiring Soon</SelectItem>
+                  <SelectItem value="Critical">Critical (&lt;7 days)</SelectItem>
+                  <SelectItem value="Expired">Expired</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div>
+              <Label className="text-xs text-slate-500 mb-1 block">Document Type</Label>
+              <Select value={filterDocType} onValueChange={setFilterDocType}>
+                <SelectTrigger data-testid="filter-doctype">
+                  <SelectValue placeholder="All Types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  {DOCUMENT_TYPES.map(type => (
+                    <SelectItem key={type} value={type}>{type}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div>
+              <Label className="text-xs text-slate-500 mb-1 block">Province</Label>
+              <Select value={filterProvince} onValueChange={setFilterProvince}>
+                <SelectTrigger data-testid="filter-province">
+                  <SelectValue placeholder="All Provinces" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Provinces</SelectItem>
+                  {provinces.map(prov => (
+                    <SelectItem key={prov} value={prov}>{prov}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Document Type</TableHead>
-                <TableHead>Issue Date</TableHead>
-                <TableHead>Expiry Date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredDocuments.length > 0 ? filteredDocuments.map((doc) => (
-                <TableRow key={doc.id} className="table-row-hover">
-                  <TableCell className="font-medium">{doc.document_type}</TableCell>
-                  <TableCell>{doc.issue_date ? new Date(doc.issue_date).toLocaleDateString() : '-'}</TableCell>
-                  <TableCell>{doc.expiry_date ? new Date(doc.expiry_date).toLocaleDateString() : '-'}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      {getStatusIcon(doc.status, false)}
-                      <Badge className={`${getStatusBadge(doc.status, false)} rounded-full px-2.5 py-0.5 text-xs font-medium`}>
-                        {doc.status}
-                      </Badge>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {doc.status === 'Pending' && (
-                      <Button variant="ghost" size="sm" onClick={() => handleVerifyDocument(doc.id)}>
-                        <CheckCircle className="w-4 h-4 mr-1 text-teal-600" />
-                        Verify
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              )) : (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-slate-500">
-                    No documents found
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
         </CardContent>
       </Card>
+
+      {/* Tab Navigation */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="bg-slate-100">
+          <TabsTrigger value="all">All Compliance ({documents.length})</TabsTrigger>
+          <TabsTrigger value="expired" className="text-red-600">Expired ({summary?.documents?.expired || 0})</TabsTrigger>
+          <TabsTrigger value="expiring" className="text-yellow-600">Expiring ({(summary?.documents?.expiring_soon || 0) + (summary?.documents?.critical || 0)})</TabsTrigger>
+          <TabsTrigger value="pending" className="text-blue-600">Pending ({summary?.documents?.pending || 0})</TabsTrigger>
+          <TabsTrigger value="verified" className="text-green-600">Verified ({summary?.documents?.verified || 0})</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {/* Documents Table */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <FileCheck className="w-5 h-5" />
+            Compliance Records ({filteredDocuments.length})
+          </CardTitle>
+          <CardDescription>
+            Click on candidate name to view their profile
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50">
+                  <TableHead className="font-semibold">Candidate</TableHead>
+                  <TableHead className="font-semibold">Document Type</TableHead>
+                  <TableHead className="font-semibold">Status</TableHead>
+                  <TableHead className="font-semibold">Expiry Date</TableHead>
+                  <TableHead className="font-semibold">Days Remaining</TableHead>
+                  <TableHead className="font-semibold">Province</TableHead>
+                  <TableHead className="font-semibold">Last Updated</TableHead>
+                  <TableHead className="font-semibold text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredDocuments.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8 text-slate-500">
+                      <FileWarning className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                      No compliance records found matching your filters
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredDocuments.map((doc) => (
+                    <TableRow 
+                      key={doc.id} 
+                      className={`hover:bg-slate-50 ${doc.is_orphan ? 'bg-orange-50' : ''}`}
+                      data-testid={`compliance-row-${doc.id}`}
+                    >
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
+                            <User className="w-4 h-4 text-slate-500" />
+                          </div>
+                          <div>
+                            {doc.is_orphan ? (
+                              <span className="text-orange-600 font-medium">{doc.candidate_name}</span>
+                            ) : (
+                              <Link 
+                                to={`/candidates/${doc.candidate_id}`}
+                                className="text-slate-900 font-medium hover:text-red-600 hover:underline flex items-center gap-1"
+                                data-testid={`candidate-link-${doc.candidate_id}`}
+                              >
+                                {doc.candidate_name}
+                                <ExternalLink className="w-3 h-3" />
+                              </Link>
+                            )}
+                            {doc.candidate_email && (
+                              <p className="text-xs text-slate-500">{doc.candidate_email}</p>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-medium">{doc.document_type}</span>
+                      </TableCell>
+                      <TableCell>
+                        {getStatusBadge(doc.status, doc.days_remaining)}
+                      </TableCell>
+                      <TableCell>
+                        {doc.expiry_date ? (
+                          <div className="flex items-center gap-1 text-sm">
+                            <Calendar className="w-3 h-3 text-slate-400" />
+                            {new Date(doc.expiry_date).toLocaleDateString()}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {getDaysRemainingBadge(doc.days_remaining)}
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-slate-600">{doc.candidate_province || '-'}</span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-xs text-slate-500">
+                          {doc.updated_at ? new Date(doc.updated_at).toLocaleDateString() : '-'}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {doc.file_url && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => window.open(doc.file_url, '_blank')}
+                              title="View Document"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {doc.original_status !== 'Verified' && !doc.is_orphan && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              className="text-green-600 hover:text-green-700"
+                              onClick={() => openVerifyDialog(doc)}
+                              title="Verify Document"
+                              data-testid={`verify-btn-${doc.id}`}
+                            >
+                              <CheckSquare className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {!doc.is_orphan && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => navigate(`/candidates/${doc.candidate_id}`)}
+                              title="View Candidate"
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Verify Document Dialog */}
+      <Dialog open={showVerifyDialog} onOpenChange={setShowVerifyDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Verify Document</DialogTitle>
+          </DialogHeader>
+          {verifyingDoc && (
+            <div className="space-y-4">
+              <div className="bg-slate-50 rounded-lg p-4 space-y-2">
+                <p><span className="text-slate-500">Candidate:</span> <strong>{verifyingDoc.candidate_name}</strong></p>
+                <p><span className="text-slate-500">Document:</span> <strong>{verifyingDoc.document_type}</strong></p>
+                {verifyingDoc.expiry_date && (
+                  <p><span className="text-slate-500">Expires:</span> <strong>{new Date(verifyingDoc.expiry_date).toLocaleDateString()}</strong></p>
+                )}
+              </div>
+              <p className="text-sm text-slate-600">
+                By verifying this document, you confirm that you have reviewed the document 
+                and it meets all compliance requirements.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowVerifyDialog(false)}>
+              Cancel
+            </Button>
+            <Button className="bg-green-600 hover:bg-green-700" onClick={handleVerifyDocument}>
+              <CheckCircle className="w-4 h-4 mr-2" />
+              Verify Document
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
