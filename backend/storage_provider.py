@@ -126,10 +126,7 @@ class LocalStorageProvider(StorageProvider):
         self.upload_dir.mkdir(exist_ok=True)
         
         # Get base URL from environment or use default
-        self.base_url = base_url or os.environ.get(
-            'BACKEND_URL', 
-            'https://mccare-ats-hub.preview.emergentagent.com'
-        )
+        self.base_url = base_url or os.environ.get('BACKEND_URL', '')
         
         logger.info(f"LocalStorageProvider initialized: {self.upload_dir}")
     
