@@ -17,6 +17,7 @@ import TimesheetsPage from './pages/TimesheetsPage';
 import ReportsPage from './pages/ReportsPage';
 import SettingsPage from './pages/SettingsPage';
 import LeadCaptureSettingsPage from './pages/LeadCaptureSettingsPage';
+import NotificationSettingsPage from './pages/NotificationSettingsPage';
 
 // Layout
 import MainLayout from './components/layout/MainLayout';
