@@ -133,6 +133,14 @@ Build a full-stack web app called McCare Global ATS – Travel Nurse Recruitment
 - ✅ Login page with demo credentials display
 - ✅ Dashboard with stats tiles and charts
 - ✅ Leads page with Kanban board and color-coded source badges
+- ✅ **NEW (Feb 12): Enhanced Lead Actions Module**
+  - Actions dropdown menu with 6 options
+  - Convert to Candidate dialog with data preview
+  - Duplicate detection modal with link option
+  - Assign Recruiter dialog with recruiter list
+  - Move Stage dialog with all 9 stages
+  - Reject Lead dialog with reason input
+  - Converted badge shown on converted leads
 - ✅ Candidates page with table and filters
 - ✅ Candidate detail page with tabs
 - ✅ Compliance dashboard with expiry tracking
