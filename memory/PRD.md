@@ -175,9 +175,10 @@ Build a full-stack web app called McCare Global ATS – Travel Nurse Recruitment
 ### P1 (High Priority - Should Have)
 - [ ] Real HubSpot API integration (with API keys)
 - [ ] Email notifications for expiring credentials
-- [ ] Document file upload (currently URL-based)
+- [x] **Document file upload with Storage Provider abstraction** ✅ COMPLETE
 - [ ] Advanced search/filtering
 - [ ] Bulk actions (leads, candidates)
+- [ ] Migrate to S3/GCS when cloud credentials available
 
 ### P2 (Medium Priority - Nice to Have)
 - [ ] Calendar integration for scheduling
