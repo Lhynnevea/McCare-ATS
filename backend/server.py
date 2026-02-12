@@ -584,26 +584,163 @@ async def get_pipeline_stages(current_user: dict = Depends(get_current_user)):
     return {
         "stages": VALID_LEAD_STAGES,
         "stage_config": [
-            {"id": "New Lead", "label": "New Lead", "color": "bg-red-500"},
-            {"id": "Contacted", "label": "Contacted", "color": "bg-orange-500"},
-            {"id": "Screening Scheduled", "label": "Screening Scheduled", "color": "bg-yellow-500"},
-            {"id": "Application Submitted", "label": "Application Submitted", "color": "bg-green-500"},
-            {"id": "Interview", "label": "Interview", "color": "bg-blue-500"},
-            {"id": "Offer", "label": "Offer", "color": "bg-purple-500"},
-            {"id": "Hired", "label": "Hired", "color": "bg-emerald-500"},
-            {"id": "Rejected", "label": "Rejected", "color": "bg-slate-500"}
+            {"id": "New Lead", "label": "New Lead", "color": "bg-blue-500"},
+            {"id": "Contacted", "label": "Contacted", "color": "bg-purple-500"},
+            {"id": "Screening Scheduled", "label": "Screening Scheduled", "color": "bg-amber-500"},
+            {"id": "Application Submitted", "label": "Application Submitted", "color": "bg-cyan-500"},
+            {"id": "Interview", "label": "Interview", "color": "bg-indigo-500"},
+            {"id": "Offer", "label": "Offer", "color": "bg-green-500"},
+            {"id": "Hired", "label": "Hired", "color": "bg-teal-500"},
+            {"id": "Converted", "label": "Converted", "color": "bg-emerald-500"},
+            {"id": "Rejected", "label": "Rejected", "color": "bg-red-500"}
         ]
     }
 
-@api_router.post("/leads/{lead_id}/convert")
-async def convert_lead_to_candidate(lead_id: str, current_user: dict = Depends(get_current_user)):
+# Convert to Candidate Request Model
+class ConvertLeadRequest(BaseModel):
+    link_to_existing: bool = False
+    existing_candidate_id: Optional[str] = None
+    post_conversion_stage: Optional[str] = "Converted"
+
+@api_router.get("/leads/{lead_id}/check-duplicate")
+async def check_duplicate_candidate(lead_id: str, current_user: dict = Depends(get_current_user)):
+    """
+    Check if a candidate with the same email already exists before conversion.
+    Returns existing candidate info if found.
+    """
     lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     
-    # Create candidate from lead
+    # Check if lead is already converted
+    if lead.get("candidateId"):
+        existing_candidate = await db.candidates.find_one({"id": lead["candidateId"]}, {"_id": 0})
+        return {
+            "already_converted": True,
+            "candidate_id": lead["candidateId"],
+            "candidate": existing_candidate
+        }
+    
+    # Check for existing candidate with same email
+    existing_candidate = await db.candidates.find_one({"email": lead["email"]}, {"_id": 0})
+    if existing_candidate:
+        return {
+            "duplicate_found": True,
+            "existing_candidate": {
+                "id": existing_candidate["id"],
+                "first_name": existing_candidate.get("first_name"),
+                "last_name": existing_candidate.get("last_name"),
+                "email": existing_candidate.get("email"),
+                "status": existing_candidate.get("status"),
+                "primary_specialty": existing_candidate.get("primary_specialty")
+            }
+        }
+    
+    return {"duplicate_found": False}
+
+@api_router.post("/leads/{lead_id}/convert")
+async def convert_lead_to_candidate(
+    lead_id: str, 
+    request: ConvertLeadRequest = ConvertLeadRequest(),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Convert a lead to a candidate with duplicate detection and linking support.
+    
+    Features:
+    - Checks for existing candidates with same email
+    - Supports linking to existing candidate instead of creating duplicate
+    - Configurable post-conversion stage (Converted or Hired)
+    - Creates bidirectional link between lead and candidate
+    - Logs activity with user attribution
+    """
+    # Check permissions - Recruiters and Admins can convert
+    if current_user["role"] not in ["Admin", "Recruiter"]:
+        raise HTTPException(status_code=403, detail="Only Recruiters and Admins can convert leads")
+    
+    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    # Check if lead is already converted
+    if lead.get("candidateId"):
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Lead is already converted to candidate: {lead['candidateId']}"
+        )
+    
+    now = datetime.now(timezone.utc).isoformat()
+    user_name = f"{current_user.get('first_name', '')} {current_user.get('last_name', '')}".strip()
+    
+    # Handle linking to existing candidate
+    if request.link_to_existing and request.existing_candidate_id:
+        existing_candidate = await db.candidates.find_one({"id": request.existing_candidate_id}, {"_id": 0})
+        if not existing_candidate:
+            raise HTTPException(status_code=404, detail="Existing candidate not found")
+        
+        # Link lead to existing candidate
+        await db.leads.update_one(
+            {"id": lead_id}, 
+            {"$set": {
+                "candidateId": request.existing_candidate_id,
+                "stage": request.post_conversion_stage or "Converted",
+                "updated_at": now
+            }}
+        )
+        
+        # Update candidate with source lead reference (if not already set)
+        if not existing_candidate.get("sourceLeadId"):
+            await db.candidates.update_one(
+                {"id": request.existing_candidate_id},
+                {"$set": {
+                    "sourceLeadId": lead_id,
+                    "updated_at": now
+                }}
+            )
+        
+        # Log activity
+        await db.activities.insert_one({
+            "id": str(uuid.uuid4()),
+            "entity_type": "lead",
+            "entity_id": lead_id,
+            "activity_type": "linked_to_candidate",
+            "description": f"Lead linked to existing candidate by {user_name} on {now[:10]}",
+            "user_id": current_user["id"],
+            "created_at": now,
+            "metadata": {
+                "candidate_id": request.existing_candidate_id,
+                "action": "link"
+            }
+        })
+        
+        return {
+            "status": "linked",
+            "message": "Lead successfully linked to existing candidate",
+            "candidate_id": request.existing_candidate_id,
+            "candidate": existing_candidate
+        }
+    
+    # Check for duplicate candidate by email
+    existing_candidate = await db.candidates.find_one({"email": lead["email"]}, {"_id": 0})
+    if existing_candidate and not request.link_to_existing:
+        # Return info about existing candidate so frontend can prompt user
+        return {
+            "status": "duplicate_found",
+            "message": "A candidate with this email already exists",
+            "existing_candidate": {
+                "id": existing_candidate["id"],
+                "first_name": existing_candidate.get("first_name"),
+                "last_name": existing_candidate.get("last_name"),
+                "email": existing_candidate.get("email"),
+                "status": existing_candidate.get("status"),
+                "primary_specialty": existing_candidate.get("primary_specialty")
+            }
+        }
+    
+    # Create new candidate from lead
+    candidate_id = str(uuid.uuid4())
     candidate_dict = {
-        "id": str(uuid.uuid4()),
+        "id": candidate_id,
         "first_name": lead["first_name"],
         "last_name": lead["last_name"],
         "email": lead["email"],
@@ -613,31 +750,179 @@ async def convert_lead_to_candidate(lead_id: str, current_user: dict = Depends(g
         "tags": lead.get("tags", []),
         "notes": lead.get("notes"),
         "status": "Active",
-        "lead_id": lead_id,
+        "sourceLeadId": lead_id,  # Link back to source lead
+        "recruiter_id": lead.get("recruiter_id") or current_user["id"],  # Carry over recruiter
         "country": "Canada",
-        "desired_locations": [],
+        "desired_locations": [lead.get("province_preference")] if lead.get("province_preference") else [],
         "travel_willingness": True,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat()
+        "created_at": now,
+        "updated_at": now
     }
     
     await db.candidates.insert_one(candidate_dict)
     
-    # Update lead stage
-    await db.leads.update_one({"id": lead_id}, {"$set": {"stage": "Hired", "updated_at": datetime.now(timezone.utc).isoformat()}})
+    # Update lead with candidate reference and stage
+    post_stage = request.post_conversion_stage or "Converted"
+    await db.leads.update_one(
+        {"id": lead_id}, 
+        {"$set": {
+            "candidateId": candidate_id,
+            "stage": post_stage,
+            "updated_at": now
+        }}
+    )
+    
+    # Log conversion activity
+    await db.activities.insert_one({
+        "id": str(uuid.uuid4()),
+        "entity_type": "lead",
+        "entity_id": lead_id,
+        "activity_type": "converted_to_candidate",
+        "description": f"Lead converted to Candidate by {user_name} on {now[:10]}",
+        "user_id": current_user["id"],
+        "created_at": now,
+        "metadata": {
+            "candidate_id": candidate_id,
+            "action": "convert"
+        }
+    })
+    
+    # Also log on candidate side
+    await db.activities.insert_one({
+        "id": str(uuid.uuid4()),
+        "entity_type": "candidate",
+        "entity_id": candidate_id,
+        "activity_type": "created_from_lead",
+        "description": f"Candidate created from lead conversion by {user_name}",
+        "user_id": current_user["id"],
+        "created_at": now,
+        "metadata": {
+            "source_lead_id": lead_id,
+            "action": "convert"
+        }
+    })
+    
+    return {
+        "status": "converted",
+        "message": "Lead successfully converted to Candidate",
+        "candidate_id": candidate_id,
+        "candidate": serialize_doc(candidate_dict)
+    }
+
+@api_router.put("/leads/{lead_id}/reject")
+async def reject_lead(lead_id: str, reason: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """
+    Reject a lead and move it to Rejected stage.
+    Logs rejection reason if provided.
+    """
+    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    user_name = f"{current_user.get('first_name', '')} {current_user.get('last_name', '')}".strip()
+    old_stage = lead.get("stage")
+    
+    # Update lead stage to Rejected
+    update_data = {
+        "stage": "Rejected",
+        "rejection_reason": reason,
+        "rejected_by": current_user["id"],
+        "rejected_at": now,
+        "updated_at": now
+    }
+    
+    await db.leads.update_one({"id": lead_id}, {"$set": update_data})
+    
+    # Log activity
+    description = f"Lead rejected by {user_name}"
+    if reason:
+        description += f". Reason: {reason}"
+    
+    await db.activities.insert_one({
+        "id": str(uuid.uuid4()),
+        "entity_type": "lead",
+        "entity_id": lead_id,
+        "activity_type": "rejected",
+        "description": description,
+        "user_id": current_user["id"],
+        "created_at": now
+    })
+    
+    # Log stage history
+    await db.lead_stage_history.insert_one({
+        "id": str(uuid.uuid4()),
+        "lead_id": lead_id,
+        "from_stage": old_stage,
+        "to_stage": "Rejected",
+        "changed_by": current_user["id"],
+        "changed_by_name": user_name,
+        "changed_at": now,
+        "reason": reason
+    })
+    
+    return {"message": "Lead rejected successfully", "stage": "Rejected"}
+
+@api_router.put("/leads/{lead_id}/assign")
+async def assign_recruiter_to_lead(lead_id: str, recruiter_id: str, current_user: dict = Depends(get_current_user)):
+    """
+    Assign a recruiter to a lead.
+    """
+    # Verify recruiter exists
+    recruiter = await db.users.find_one({"id": recruiter_id}, {"_id": 0, "password": 0})
+    if not recruiter:
+        raise HTTPException(status_code=404, detail="Recruiter not found")
+    
+    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    user_name = f"{current_user.get('first_name', '')} {current_user.get('last_name', '')}".strip()
+    recruiter_name = f"{recruiter.get('first_name', '')} {recruiter.get('last_name', '')}".strip()
+    
+    old_recruiter_id = lead.get("recruiter_id")
+    
+    await db.leads.update_one(
+        {"id": lead_id},
+        {"$set": {"recruiter_id": recruiter_id, "updated_at": now}}
+    )
     
     # Log activity
     await db.activities.insert_one({
         "id": str(uuid.uuid4()),
         "entity_type": "lead",
         "entity_id": lead_id,
-        "activity_type": "converted",
-        "description": f"Lead converted to candidate: {candidate_dict['id']}",
+        "activity_type": "recruiter_assigned",
+        "description": f"Recruiter {recruiter_name} assigned to lead by {user_name}",
         "user_id": current_user["id"],
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": now,
+        "metadata": {
+            "old_recruiter_id": old_recruiter_id,
+            "new_recruiter_id": recruiter_id
+        }
     })
     
-    return serialize_doc(candidate_dict)
+    return {
+        "message": "Recruiter assigned successfully",
+        "recruiter": {
+            "id": recruiter["id"],
+            "name": recruiter_name,
+            "email": recruiter.get("email")
+        }
+    }
+
+@api_router.get("/recruiters")
+async def get_recruiters(current_user: dict = Depends(get_current_user)):
+    """
+    Get list of users who can be assigned as recruiters (Admin and Recruiter roles).
+    """
+    recruiters = await db.users.find(
+        {"role": {"$in": ["Admin", "Recruiter"]}},
+        {"_id": 0, "password": 0}
+    ).to_list(100)
+    
+    return recruiters
 
 # ==================== LEAD CAPTURE & INTAKE SYSTEM ====================
 
