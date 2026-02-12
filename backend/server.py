@@ -1412,7 +1412,11 @@ async def replace_document_file(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
-    """Replace an existing document's file"""
+    """
+    Replace an existing document's file.
+    
+    Uses the configured StorageProvider for file operations.
+    """
     # Get existing document
     document = await db.documents.find_one({"id": document_id}, {"_id": 0})
     if not document:
@@ -1429,40 +1433,46 @@ async def replace_document_file(
     if file_size > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB")
     
-    # Delete old file if exists
+    # Delete old file using storage provider
     old_file_path = document.get("file_path")
     if old_file_path:
-        old_full_path = UPLOAD_DIR / old_file_path
-        if old_full_path.exists():
-            old_full_path.unlink()
+        await storage_provider.delete(old_file_path)
     
-    # Create new filename
+    # Read new file content
+    content = await file.read()
+    
+    # Determine content type
+    content_types = {
+        '.pdf': 'application/pdf',
+        '.doc': 'application/msword',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.gif': 'image/gif',
+        '.txt': 'text/plain'
+    }
+    content_type = content_types.get(ext, 'application/octet-stream')
+    
+    # Upload new file using storage provider
     candidate_id = document["candidate_id"]
-    safe_filename = f"{document_id}{ext}"
-    
-    candidate_dir = UPLOAD_DIR / candidate_id
-    candidate_dir.mkdir(exist_ok=True)
-    
-    file_path = candidate_dir / safe_filename
-    relative_path = f"{candidate_id}/{safe_filename}"
-    
-    # Save new file
     try:
-        async with aiofiles.open(file_path, 'wb') as out_file:
-            content = await file.read()
-            await out_file.write(content)
+        storage_result = await storage_provider.upload(
+            content=content,
+            filename=file.filename,
+            folder=candidate_id,
+            content_type=content_type
+        )
     except Exception as e:
         logger.error(f"File replacement error: {e}")
         raise HTTPException(status_code=500, detail="Failed to save file")
     
-    backend_url = os.environ.get('BACKEND_URL', 'https://mccare-ats-hub.preview.emergentagent.com')
-    file_url = f"{backend_url}/api/files/{relative_path}"
-    
     # Update document record
     now = datetime.now(timezone.utc).isoformat()
     update_data = {
-        "file_url": file_url,
-        "file_path": relative_path,
+        "file_url": storage_result["file_url"],
+        "file_path": storage_result["file_path"],
+        "storage_type": storage_result["storage_type"],
         "file_name": file.filename,
         "file_size": file_size,
         "file_type": ext,
