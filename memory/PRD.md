@@ -328,4 +328,4 @@ storage_provider.py
 - Health Check: https://ats-lead-capture-fix.preview.emergentagent.com/api/health
 
 ---
-*Last Updated: February 12, 2026*
+*Last Updated: February 12, 2026 - Added Convert to Candidate feature*
