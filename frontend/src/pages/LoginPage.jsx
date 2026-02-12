@@ -167,10 +167,8 @@ const LoginPage = () => {
                 <div className="mt-6 p-4 bg-slate-50 rounded-lg">
                   <p className="text-xs text-slate-600 mb-2 font-medium">Demo Credentials:</p>
                   <div className="grid grid-cols-2 gap-2 text-xs text-slate-500">
-                    <p>Admin: admin@mccareglobal.com</p>
-                    <p>Pass: admin123</p>
-                    <p>Recruiter: recruiter@mccareglobal.com</p>
-                    <p>Pass: recruiter123</p>
+                    <p>Email: admin@example.com</p>
+                    <p>Pass: password</p>
                   </div>
                 </div>
               </TabsContent>
