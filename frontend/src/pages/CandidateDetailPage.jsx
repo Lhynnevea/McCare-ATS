@@ -62,6 +62,7 @@ const CandidateDetailPage = () => {
   const [documents, setDocuments] = useState([]);
   const [activities, setActivities] = useState([]);
   const [assignments, setAssignments] = useState([]);
+  const [compliance, setCompliance] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDocDialog, setShowDocDialog] = useState(false);
@@ -90,17 +91,19 @@ const CandidateDetailPage = () => {
 
   const fetchCandidateData = async () => {
     try {
-      const [candidateRes, docsRes, activitiesRes, assignmentsRes] = await Promise.all([
+      const [candidateRes, docsRes, activitiesRes, assignmentsRes, complianceRes] = await Promise.all([
         api.get(`/candidates/${id}`),
         api.get(`/documents?candidate_id=${id}`),
         api.get(`/activities?entity_type=candidate&entity_id=${id}`),
-        api.get(`/assignments?candidate_id=${id}`)
+        api.get(`/assignments?candidate_id=${id}`),
+        api.get(`/compliance/candidate/${id}`)
       ]);
       setCandidate(candidateRes.data);
       setFormData(candidateRes.data);
       setDocuments(docsRes.data);
       setActivities(activitiesRes.data);
       setAssignments(assignmentsRes.data);
+      setCompliance(complianceRes.data);
     } catch (error) {
       toast.error('Failed to fetch candidate data');
       navigate('/candidates');
