@@ -539,6 +539,24 @@ const LeadsPage = () => {
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
               />
             </div>
+            <div className="space-y-2">
+              <Label>Stage</Label>
+              <Select value={formData.stage || ''} onValueChange={(v) => setFormData({ ...formData, stage: v })}>
+                <SelectTrigger data-testid="edit-stage-select">
+                  <SelectValue placeholder="Select stage" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PIPELINE_STAGES.map(s => (
+                    <SelectItem key={s.id} value={s.id}>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${s.color}`} />
+                        {s.id}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Source</Label>
