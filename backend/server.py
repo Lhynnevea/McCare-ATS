@@ -1361,6 +1361,68 @@ async def get_lead_intake_stats(current_user: dict = Depends(get_current_user)):
         "total_leads": await db.leads.count_documents({})
     }
 
+
+@api_router.get("/lead-intake/logs")
+async def get_lead_intake_logs(
+    limit: int = Query(50, ge=1, le=500),
+    status: Optional[str] = Query(None, description="Filter by status: received, success, error, validation_error"),
+    form_id: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get lead intake logs for debugging form submissions.
+    Shows all form submission attempts with their status and any errors.
+    """
+    if current_user["role"] not in ["Admin", "Recruiter"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    query = {}
+    if status:
+        query["status"] = status
+    if form_id:
+        query["form_id"] = form_id
+    
+    logs = await db.lead_intake_logs.find(
+        query, {"_id": 0}
+    ).sort("created_at", -1).limit(limit).to_list(limit)
+    
+    return logs
+
+
+@api_router.get("/lead-intake/logs/summary")
+async def get_lead_intake_logs_summary(current_user: dict = Depends(get_current_user)):
+    """Get summary of lead intake log statuses for monitoring"""
+    if current_user["role"] not in ["Admin", "Recruiter"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get counts by status
+    pipeline = [
+        {"$group": {"_id": "$status", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}}
+    ]
+    status_counts = await db.lead_intake_logs.aggregate(pipeline).to_list(100)
+    
+    # Get recent errors
+    recent_errors = await db.lead_intake_logs.find(
+        {"status": {"$in": ["error", "validation_error"]}},
+        {"_id": 0, "created_at": 1, "error": 1, "origin": 1, "form_id": 1}
+    ).sort("created_at", -1).limit(10).to_list(10)
+    
+    # Get counts by origin
+    origin_pipeline = [
+        {"$group": {"_id": "$origin", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10}
+    ]
+    origin_counts = await db.lead_intake_logs.aggregate(origin_pipeline).to_list(10)
+    
+    return {
+        "by_status": {item["_id"] or "unknown": item["count"] for item in status_counts},
+        "recent_errors": recent_errors,
+        "by_origin": {item["_id"] or "unknown": item["count"] for item in origin_counts},
+        "total_submissions": await db.lead_intake_logs.count_documents({})
+    }
+
 # ==================== CANDIDATES ENDPOINTS ====================
 
 @api_router.get("/candidates")
