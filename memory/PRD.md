@@ -106,6 +106,14 @@ Build a full-stack web app called McCare Global ATS – Travel Nurse Recruitment
 - ✅ **NEW: Lead Audit Log API**
 - ✅ **NEW: Lead Intake Statistics API**
 - ✅ **NEW: Embeddable Form Code Generator**
+- ✅ **NEW (Feb 12): Document File Upload System**
+  - Storage Provider abstraction pattern (Local/S3/GCS)
+  - LocalStorageProvider for MVP (ready for cloud migration)
+  - S3StorageProvider skeleton (requires AWS credentials)
+  - GCSStorageProvider skeleton (requires GCS credentials)
+  - File upload/download/delete endpoints
+  - File validation (extension, size limits)
+  - Content-type detection
 
 ### Frontend (React + Tailwind + Shadcn UI)
 - ✅ Login page with demo credentials display
@@ -124,6 +132,11 @@ Build a full-stack web app called McCare Global ATS – Travel Nurse Recruitment
   - Embed Form: Copy-paste embeddable form code
   - API Endpoints: All 4 public endpoints with copy buttons
   - Audit Log: Track all lead submissions with source/tags
+- ✅ **NEW (Feb 12): Document Upload UI**
+  - Upload File button on candidate Documents tab
+  - Upload dialog with file picker, document type, dates
+  - Progress indicator during upload
+  - Download/Verify/Delete actions for documents
 
 ### Documentation
 - ✅ USER_GUIDE.md - Complete workflow documentation
