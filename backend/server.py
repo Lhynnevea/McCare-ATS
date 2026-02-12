@@ -637,6 +637,77 @@ async def create_lead_audit_log(lead_id: str, source: str, payload: dict, auto_f
     await db.lead_audit_logs.insert_one(audit_entry)
     return audit_entry
 
+
+async def log_lead_intake(request: Request, form_id: str, payload: dict, source: str) -> dict:
+    """
+    Log every lead intake attempt for debugging and audit.
+    Creates entry in lead_intake_logs collection.
+    """
+    # Get client IP and origin
+    client_ip = request.client.host if request.client else "unknown"
+    origin = request.headers.get("origin", request.headers.get("referer", "unknown"))
+    
+    # Sanitize payload for logging (remove sensitive data if needed)
+    safe_payload = {
+        "first_name": payload.get("first_name", payload.get("firstName")),
+        "last_name": payload.get("last_name", payload.get("lastName")),
+        "email": payload.get("email"),
+        "phone": payload.get("phone", "")[:4] + "****" if payload.get("phone") else None,
+        "specialty": payload.get("specialty", payload.get("specialization")),
+        "province_preference": payload.get("province_preference", payload.get("province")),
+        "utm_source": payload.get("utm_source"),
+        "utm_medium": payload.get("utm_medium"),
+        "utm_campaign": payload.get("utm_campaign"),
+        "form_id": payload.get("form_id"),
+        "landing_page_url": payload.get("landing_page_url"),
+        "referrer_url": payload.get("referrer_url"),
+    }
+    
+    log_entry = {
+        "id": str(uuid.uuid4()),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "origin": origin,
+        "ip": client_ip,
+        "form_id": form_id,
+        "source": source,
+        "payload": safe_payload,
+        "payload_keys": list(payload.keys()),
+        "status": "received",
+        "error": None,
+        "lead_id": None,
+        "user_agent": request.headers.get("user-agent", "unknown")[:200],
+    }
+    
+    try:
+        await db.lead_intake_logs.insert_one(log_entry)
+        logger.info(f"Lead intake logged: id={log_entry['id']}, origin={origin}, form_id={form_id}, email={payload.get('email')}")
+    except Exception as e:
+        logger.error(f"Failed to log lead intake: {e}")
+    
+    return log_entry
+
+
+async def update_lead_intake_log(log_id: str, status: str, lead_id: str = None, error: str = None):
+    """Update lead intake log with final status"""
+    try:
+        update_data = {
+            "status": status,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        if lead_id:
+            update_data["lead_id"] = lead_id
+        if error:
+            update_data["error"] = error
+        
+        await db.lead_intake_logs.update_one(
+            {"id": log_id},
+            {"$set": update_data}
+        )
+        logger.info(f"Lead intake log updated: id={log_id}, status={status}, lead_id={lead_id}")
+    except Exception as e:
+        logger.error(f"Failed to update lead intake log: {e}")
+
+
 async def process_lead_intake(lead_data: dict, source: str) -> dict:
     """Central lead processing function for all intake sources"""
     settings = await get_lead_capture_settings()
