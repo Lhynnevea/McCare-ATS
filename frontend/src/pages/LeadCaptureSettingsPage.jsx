@@ -489,6 +489,26 @@ const LeadCaptureSettingsPage = () => {
                 <p className="text-xs text-slate-500">For third-party landing pages and external integrations</p>
               </div>
 
+              {/* Public Settings Endpoint (NEW) */}
+              <div className="p-4 bg-slate-50 rounded-lg space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Badge className="bg-teal-100 text-teal-700">GET</Badge>
+                    <span className="font-medium">Lead Capture Settings (Public)</span>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => copyToClipboard(embedCode?.settings_endpoint, 'Settings Endpoint')}
+                  >
+                    <Copy className="w-4 h-4 mr-1" />
+                    {copiedEndpoint === 'Settings Endpoint' ? 'Copied!' : 'Copy'}
+                  </Button>
+                </div>
+                <code className="block text-sm bg-slate-200 p-2 rounded">{embedCode?.settings_endpoint}</code>
+                <p className="text-xs text-slate-500">Public endpoint for embedded forms to fetch form configuration (no auth required)</p>
+              </div>
+
               {/* Form Submit Endpoint */}
               <div className="p-4 bg-slate-50 rounded-lg space-y-2">
                 <div className="flex items-center justify-between">
