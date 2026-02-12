@@ -1601,8 +1601,7 @@ async def get_upload_stats(current_user: dict = Depends(get_current_user)):
     return {
         "total_documents": total_docs,
         "documents_with_files": docs_with_files,
-        "total_storage_bytes": total_size,
-        "total_storage_mb": round(total_size / (1024 * 1024), 2),
+        **storage_stats,
         "max_file_size_mb": MAX_FILE_SIZE // (1024 * 1024),
         "allowed_extensions": list(ALLOWED_EXTENSIONS),
         "by_type": {item["_id"] or "Unknown": item["count"] for item in type_counts}
