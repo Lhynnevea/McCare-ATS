@@ -169,6 +169,7 @@ function App() {
                     <Route path="/reports" element={<ReportsPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="/lead-capture" element={<LeadCaptureSettingsPage />} />
+                    <Route path="/notifications-settings" element={<NotificationSettingsPage />} />
                   </Routes>
                 </MainLayout>
               </ProtectedRoute>
