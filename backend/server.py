@@ -510,6 +510,7 @@ VALID_LEAD_STAGES = [
     "Interview",
     "Offer",
     "Hired",
+    "Converted",
     "Rejected"
 ]
 
