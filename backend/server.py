@@ -1611,132 +1611,222 @@ async def get_embed_code(current_user: dict = Depends(get_current_user)):
     if not backend_url:
         raise HTTPException(status_code=500, detail="BACKEND_URL environment variable not configured")
     
-    embed_html = f'''<!-- McCare Global ATS Lead Capture Form -->
-<div id="mccare-lead-form"></div>
+    embed_html = f'''<!-- McCare Global ATS Lead Capture Form v2 -->
+<div id="mccare-lead-form">
+  <div id="mccare-loading" style="text-align:center;padding:40px;font-family:system-ui,-apple-system,sans-serif;color:#6b7280;">
+    Loading form...
+  </div>
+</div>
 <script>
 (function() {{
+  // IMPORTANT: Use absolute URL - this form may be embedded on external domains
+  var API_BASE = '{backend_url}';
+  var SETTINGS_URL = API_BASE + '/api/public/lead-capture-settings';
+  var SUBMIT_URL = API_BASE + '/api/public/form-submit';
+  
   var formContainer = document.getElementById('mccare-lead-form');
-  var form = document.createElement('form');
-  form.id = 'mccare-capture-form';
-  form.style.cssText = 'max-width:500px;margin:0 auto;font-family:system-ui,-apple-system,sans-serif;';
+  var loadingDiv = document.getElementById('mccare-loading');
   
-  var fields = [
-    {{name: 'first_name', label: 'First Name', type: 'text', required: true}},
-    {{name: 'last_name', label: 'Last Name', type: 'text', required: true}},
-    {{name: 'email', label: 'Email', type: 'email', required: true}},
-    {{name: 'phone', label: 'Phone', type: 'tel', required: false}},
-    {{name: 'specialty', label: 'Nursing Specialty', type: 'select', options: ['', 'ICU', 'ER', 'Med-Surg', 'OR', 'Pediatrics', 'NICU', 'L&D', 'Cardiac', 'Oncology', 'Psych']}},
-    {{name: 'province_preference', label: 'Province Preference', type: 'select', options: ['', 'Ontario', 'British Columbia', 'Alberta', 'Quebec', 'Manitoba', 'Saskatchewan', 'Nova Scotia', 'New Brunswick']}},
-    {{name: 'notes', label: 'Message', type: 'textarea', required: false}}
-  ];
+  // Fetch settings from the API
+  fetch(SETTINGS_URL, {{
+    method: 'GET',
+    headers: {{ 'Accept': 'application/json' }}
+  }})
+  .then(function(response) {{
+    if (!response.ok) throw new Error('Failed to load settings');
+    return response.json();
+  }})
+  .then(function(settings) {{
+    // Remove loading indicator
+    if (loadingDiv) loadingDiv.remove();
+    
+    // Build form with settings
+    buildForm(settings);
+  }})
+  .catch(function(err) {{
+    console.error('McCare Form Error:', err);
+    // Use default settings on error
+    if (loadingDiv) loadingDiv.remove();
+    buildForm(getDefaultSettings());
+  }});
   
-  fields.forEach(function(field) {{
-    var wrapper = document.createElement('div');
-    wrapper.style.cssText = 'margin-bottom:16px;';
-    
-    var label = document.createElement('label');
-    label.textContent = field.label + (field.required ? ' *' : '');
-    label.style.cssText = 'display:block;margin-bottom:4px;font-weight:500;color:#374151;';
-    wrapper.appendChild(label);
-    
-    var input;
-    if (field.type === 'select') {{
-      input = document.createElement('select');
-      field.options.forEach(function(opt) {{
-        var option = document.createElement('option');
-        option.value = opt;
-        option.textContent = opt || 'Select...';
-        input.appendChild(option);
-      }});
-    }} else if (field.type === 'textarea') {{
-      input = document.createElement('textarea');
-      input.rows = 3;
-    }} else {{
-      input = document.createElement('input');
-      input.type = field.type;
+  function getDefaultSettings() {{
+    return {{
+      form_enabled: true,
+      form_title: 'Join Our Healthcare Team',
+      form_description: 'Submit your information to explore travel nursing opportunities across Canada.',
+      specialties: ['ICU', 'ER', 'Med-Surg', 'OR', 'Pediatrics', 'NICU', 'L&D', 'Cardiac', 'Oncology', 'Psych'],
+      provinces: ['Ontario', 'British Columbia', 'Alberta', 'Quebec', 'Manitoba', 'Saskatchewan', 'Nova Scotia', 'New Brunswick'],
+      success_message: 'Thank you! We will be in touch soon.',
+      submit_button_text: 'Submit Application',
+      branding: {{ primary_color: '#ff0000' }}
+    }};
+  }}
+  
+  function buildForm(settings) {{
+    if (!settings.form_enabled) {{
+      formContainer.innerHTML = '<p style="text-align:center;color:#6b7280;font-family:system-ui;">Form is currently unavailable.</p>';
+      return;
     }}
     
-    input.name = field.name;
-    input.required = field.required;
-    input.style.cssText = 'width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;box-sizing:border-box;';
-    wrapper.appendChild(input);
-    form.appendChild(wrapper);
-  }});
-  
-  // Hidden fields for tracking
-  var hiddenFields = ['utm_source', 'utm_medium', 'utm_campaign', 'landing_page_url', 'referrer_url'];
-  hiddenFields.forEach(function(name) {{
-    var hidden = document.createElement('input');
-    hidden.type = 'hidden';
-    hidden.name = name;
-    form.appendChild(hidden);
-  }});
-  
-  // Submit button
-  var submitBtn = document.createElement('button');
-  submitBtn.type = 'submit';
-  submitBtn.textContent = 'Submit Application';
-  submitBtn.style.cssText = 'width:100%;padding:12px;background:#ff0000;color:white;border:none;border-radius:6px;font-size:16px;font-weight:600;cursor:pointer;';
-  form.appendChild(submitBtn);
-  
-  // Status message
-  var status = document.createElement('div');
-  status.id = 'mccare-status';
-  status.style.cssText = 'margin-top:12px;padding:10px;border-radius:6px;display:none;';
-  form.appendChild(status);
-  
-  formContainer.appendChild(form);
-  
-  // Populate UTM params
-  var params = new URLSearchParams(window.location.search);
-  form.querySelector('[name="utm_source"]').value = params.get('utm_source') || '';
-  form.querySelector('[name="utm_medium"]').value = params.get('utm_medium') || '';
-  form.querySelector('[name="utm_campaign"]').value = params.get('utm_campaign') || '';
-  form.querySelector('[name="landing_page_url"]').value = window.location.href;
-  form.querySelector('[name="referrer_url"]').value = document.referrer;
-  
-  // Form submission
-  form.addEventListener('submit', function(e) {{
-    e.preventDefault();
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Submitting...';
+    var form = document.createElement('form');
+    form.id = 'mccare-capture-form';
+    form.style.cssText = 'max-width:500px;margin:0 auto;font-family:system-ui,-apple-system,sans-serif;';
     
-    var formData = {{}};
-    new FormData(form).forEach(function(value, key) {{
-      formData[key] = value;
-    }});
-    formData.form_id = 'mccare-embed-form';
+    // Title
+    if (settings.form_title) {{
+      var title = document.createElement('h2');
+      title.textContent = settings.form_title;
+      title.style.cssText = 'margin:0 0 8px;font-size:24px;font-weight:700;color:#111827;';
+      form.appendChild(title);
+    }}
     
-    fetch('{backend_url}/api/public/form-submit', {{
-      method: 'POST',
-      headers: {{'Content-Type': 'application/json'}},
-      body: JSON.stringify(formData)
-    }})
-    .then(function(r) {{ return r.json(); }})
-    .then(function(data) {{
-      status.style.display = 'block';
-      if (data.status === 'success') {{
-        status.style.background = '#d1fae5';
-        status.style.color = '#065f46';
-        status.textContent = 'Thank you! We will be in touch soon.';
-        form.reset();
+    // Description
+    if (settings.form_description) {{
+      var desc = document.createElement('p');
+      desc.textContent = settings.form_description;
+      desc.style.cssText = 'margin:0 0 24px;color:#6b7280;font-size:14px;';
+      form.appendChild(desc);
+    }}
+    
+    var specialtyOptions = [''].concat(settings.specialties || []);
+    var provinceOptions = [''].concat(settings.provinces || []);
+    
+    var fields = [
+      {{name: 'first_name', label: 'First Name', type: 'text', required: true}},
+      {{name: 'last_name', label: 'Last Name', type: 'text', required: true}},
+      {{name: 'email', label: 'Email', type: 'email', required: true}},
+      {{name: 'phone', label: 'Phone', type: 'tel', required: false}},
+      {{name: 'specialty', label: 'Nursing Specialty', type: 'select', options: specialtyOptions}},
+      {{name: 'province_preference', label: 'Province Preference', type: 'select', options: provinceOptions}},
+      {{name: 'notes', label: 'Message', type: 'textarea', required: false}}
+    ];
+    
+    fields.forEach(function(field) {{
+      var wrapper = document.createElement('div');
+      wrapper.style.cssText = 'margin-bottom:16px;';
+      
+      var label = document.createElement('label');
+      label.textContent = field.label + (field.required ? ' *' : '');
+      label.style.cssText = 'display:block;margin-bottom:4px;font-weight:500;color:#374151;font-size:14px;';
+      wrapper.appendChild(label);
+      
+      var input;
+      if (field.type === 'select') {{
+        input = document.createElement('select');
+        field.options.forEach(function(opt) {{
+          var option = document.createElement('option');
+          option.value = opt;
+          option.textContent = opt || 'Select...';
+          input.appendChild(option);
+        }});
+      }} else if (field.type === 'textarea') {{
+        input = document.createElement('textarea');
+        input.rows = 3;
       }} else {{
+        input = document.createElement('input');
+        input.type = field.type;
+      }}
+      
+      input.name = field.name;
+      input.required = field.required || false;
+      input.style.cssText = 'width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;box-sizing:border-box;';
+      wrapper.appendChild(input);
+      form.appendChild(wrapper);
+    }});
+    
+    // Hidden fields for tracking
+    var hiddenFields = ['utm_source', 'utm_medium', 'utm_campaign', 'landing_page_url', 'referrer_url'];
+    hiddenFields.forEach(function(name) {{
+      var hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.name = name;
+      form.appendChild(hidden);
+    }});
+    
+    // Submit button
+    var primaryColor = (settings.branding && settings.branding.primary_color) || '#ff0000';
+    var submitBtn = document.createElement('button');
+    submitBtn.type = 'submit';
+    submitBtn.textContent = settings.submit_button_text || 'Submit Application';
+    submitBtn.style.cssText = 'width:100%;padding:12px;background:' + primaryColor + ';color:white;border:none;border-radius:6px;font-size:16px;font-weight:600;cursor:pointer;transition:opacity 0.2s;';
+    submitBtn.onmouseover = function() {{ this.style.opacity = '0.9'; }};
+    submitBtn.onmouseout = function() {{ this.style.opacity = '1'; }};
+    form.appendChild(submitBtn);
+    
+    // Status message
+    var status = document.createElement('div');
+    status.id = 'mccare-status';
+    status.style.cssText = 'margin-top:12px;padding:12px;border-radius:6px;display:none;font-size:14px;';
+    form.appendChild(status);
+    
+    formContainer.appendChild(form);
+    
+    // Populate UTM params
+    var params = new URLSearchParams(window.location.search);
+    var utmSource = form.querySelector('[name="utm_source"]');
+    var utmMedium = form.querySelector('[name="utm_medium"]');
+    var utmCampaign = form.querySelector('[name="utm_campaign"]');
+    var landingUrl = form.querySelector('[name="landing_page_url"]');
+    var refUrl = form.querySelector('[name="referrer_url"]');
+    
+    if (utmSource) utmSource.value = params.get('utm_source') || '';
+    if (utmMedium) utmMedium.value = params.get('utm_medium') || '';
+    if (utmCampaign) utmCampaign.value = params.get('utm_campaign') || '';
+    if (landingUrl) landingUrl.value = window.location.href;
+    if (refUrl) refUrl.value = document.referrer;
+    
+    // Form submission
+    form.addEventListener('submit', function(e) {{
+      e.preventDefault();
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting...';
+      
+      var formData = {{}};
+      new FormData(form).forEach(function(value, key) {{
+        formData[key] = value;
+      }});
+      formData.form_id = 'mccare-embed-form';
+      formData.embed_origin = window.location.origin;
+      
+      fetch(SUBMIT_URL, {{
+        method: 'POST',
+        headers: {{'Content-Type': 'application/json', 'Accept': 'application/json'}},
+        body: JSON.stringify(formData)
+      }})
+      .then(function(r) {{ return r.json(); }})
+      .then(function(data) {{
+        status.style.display = 'block';
+        if (data.status === 'success') {{
+          status.style.background = '#d1fae5';
+          status.style.color = '#065f46';
+          status.textContent = settings.success_message || 'Thank you! We will be in touch soon.';
+          form.reset();
+          // Re-populate hidden fields after reset
+          if (utmSource) utmSource.value = params.get('utm_source') || '';
+          if (utmMedium) utmMedium.value = params.get('utm_medium') || '';
+          if (utmCampaign) utmCampaign.value = params.get('utm_campaign') || '';
+          if (landingUrl) landingUrl.value = window.location.href;
+          if (refUrl) refUrl.value = document.referrer;
+        }} else {{
+          status.style.background = '#fee2e2';
+          status.style.color = '#991b1b';
+          status.textContent = data.detail || 'Something went wrong. Please try again.';
+        }}
+        submitBtn.disabled = false;
+        submitBtn.textContent = settings.submit_button_text || 'Submit Application';
+      }})
+      .catch(function(err) {{
+        console.error('McCare Submit Error:', err);
+        status.style.display = 'block';
         status.style.background = '#fee2e2';
         status.style.color = '#991b1b';
-        status.textContent = data.detail || 'Something went wrong. Please try again.';
-      }}
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Submit Application';
-    }})
-    .catch(function(err) {{
-      status.style.display = 'block';
-      status.style.background = '#fee2e2';
-      status.style.color = '#991b1b';
-      status.textContent = 'Network error. Please try again.';
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Submit Application';
+        status.textContent = 'Network error. Please try again.';
+        submitBtn.disabled = false;
+        submitBtn.textContent = settings.submit_button_text || 'Submit Application';
+      }});
     }});
-  }});
+  }}
 }})();
 </script>
 <!-- End McCare Global ATS Lead Capture Form -->'''
@@ -1745,6 +1835,7 @@ async def get_embed_code(current_user: dict = Depends(get_current_user)):
         "embed_code": embed_html,
         "api_endpoint": f"{backend_url}/api/public/leads",
         "form_endpoint": f"{backend_url}/api/public/form-submit",
+        "settings_endpoint": f"{backend_url}/api/public/lead-capture-settings",
         "hubspot_webhook": f"{backend_url}/api/webhooks/hubspot",
         "landing_page_endpoint": f"{backend_url}/api/public/landing-page"
     }
