@@ -85,7 +85,8 @@ const LeadsPage = () => {
     specialty: '',
     province_preference: '',
     tags: [],
-    notes: ''
+    notes: '',
+    stage: 'New Lead'
   });
 
   useEffect(() => {
