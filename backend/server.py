@@ -749,6 +749,12 @@ async def process_lead_intake(lead_data: dict, source: str) -> dict:
         auto_converted=auto_converted
     )
     
+    # Send new lead notification
+    try:
+        await notification_service.notify_new_lead(lead_dict)
+    except Exception as e:
+        logger.error(f"Failed to send new lead notification: {e}")
+    
     result = serialize_doc(lead_dict)
     if auto_converted:
         result["auto_converted"] = True
