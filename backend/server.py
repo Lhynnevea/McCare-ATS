@@ -1922,6 +1922,376 @@ async def get_upload_stats(current_user: dict = Depends(get_current_user)):
         "by_type": {item["_id"] or "Unknown": item["count"] for item in type_counts}
     }
 
+# Required document types for compliance
+REQUIRED_DOCUMENT_TYPES = [
+    "Nursing License",
+    "Criminal Record Check",
+    "Immunization Records",
+    "BLS/ACLS"
+]
+
+@api_router.get("/compliance/dashboard")
+async def get_compliance_dashboard(
+    status: Optional[str] = Query(None, description="Filter by status: Verified, Pending, Expiring Soon, Expired"),
+    document_type: Optional[str] = Query(None),
+    candidate_name: Optional[str] = Query(None),
+    province: Optional[str] = Query(None),
+    recruiter_id: Optional[str] = Query(None),
+    expiry_from: Optional[str] = Query(None),
+    expiry_to: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get comprehensive compliance dashboard data with candidate information.
+    Returns documents with full candidate details, properly joined.
+    """
+    today = datetime.now(timezone.utc).date()
+    today_str = today.isoformat()
+    
+    # Build document query
+    doc_query = {}
+    if document_type:
+        doc_query["document_type"] = document_type
+    if status:
+        if status == "Expired":
+            doc_query["expiry_date"] = {"$lt": today_str, "$ne": None}
+        elif status == "Expiring Soon":
+            threshold_date = (today + timedelta(days=30)).isoformat()
+            doc_query["expiry_date"] = {"$gte": today_str, "$lte": threshold_date}
+        elif status in ["Verified", "Pending"]:
+            doc_query["status"] = status
+    
+    if expiry_from:
+        doc_query.setdefault("expiry_date", {})["$gte"] = expiry_from
+    if expiry_to:
+        doc_query.setdefault("expiry_date", {})["$lte"] = expiry_to
+    
+    # Get all documents
+    documents = await db.documents.find(doc_query, {"_id": 0}).to_list(10000)
+    
+    # Get all candidates for joining
+    candidate_query = {}
+    if province:
+        candidate_query["province"] = province
+    if recruiter_id:
+        candidate_query["recruiter_id"] = recruiter_id
+    
+    candidates_list = await db.candidates.find(candidate_query, {"_id": 0}).to_list(10000)
+    candidates_map = {c["id"]: c for c in candidates_list}
+    
+    # Filter by candidate name if provided
+    if candidate_name:
+        name_lower = candidate_name.lower()
+        candidates_map = {
+            k: v for k, v in candidates_map.items()
+            if name_lower in f"{v.get('first_name', '')} {v.get('last_name', '')}".lower()
+        }
+    
+    # Process documents with candidate info
+    result = []
+    for doc in documents:
+        candidate_id = doc.get("candidate_id")
+        
+        # Skip orphan documents or documents not matching candidate filters
+        if not candidate_id or candidate_id not in candidates_map:
+            if candidate_name or province or recruiter_id:
+                continue  # Skip if filtering by candidate attributes
+            # Include but flag as orphan
+            candidate = None
+        else:
+            candidate = candidates_map[candidate_id]
+        
+        # Calculate days remaining
+        days_remaining = None
+        is_expired = False
+        calculated_status = doc.get("status", "Pending")
+        
+        if doc.get("expiry_date"):
+            try:
+                if "T" in doc["expiry_date"]:
+                    expiry = datetime.fromisoformat(doc["expiry_date"].replace("Z", "+00:00")).date()
+                else:
+                    expiry = datetime.strptime(doc["expiry_date"], "%Y-%m-%d").date()
+                
+                days_remaining = (expiry - today).days
+                is_expired = days_remaining < 0
+                
+                if is_expired:
+                    calculated_status = "Expired"
+                elif days_remaining <= 7:
+                    calculated_status = "Critical"
+                elif days_remaining <= 30:
+                    calculated_status = "Expiring Soon"
+            except:
+                pass
+        
+        result.append({
+            "id": doc.get("id"),
+            "document_type": doc.get("document_type"),
+            "status": calculated_status,
+            "original_status": doc.get("status"),
+            "expiry_date": doc.get("expiry_date"),
+            "issue_date": doc.get("issue_date"),
+            "days_remaining": days_remaining,
+            "is_expired": is_expired,
+            "verified_by": doc.get("verified_by"),
+            "uploaded_by": doc.get("uploaded_by"),
+            "file_url": doc.get("file_url"),
+            "file_name": doc.get("file_name"),
+            "created_at": doc.get("created_at"),
+            "updated_at": doc.get("updated_at"),
+            "notes": doc.get("notes"),
+            # Candidate info
+            "candidate_id": candidate_id,
+            "candidate_name": f"{candidate['first_name']} {candidate['last_name']}" if candidate else "Unknown (Orphan)",
+            "candidate_email": candidate.get("email") if candidate else None,
+            "candidate_phone": candidate.get("phone") if candidate else None,
+            "candidate_province": candidate.get("province") if candidate else None,
+            "candidate_status": candidate.get("status") if candidate else None,
+            "is_orphan": candidate is None
+        })
+    
+    # Sort by urgency: Expired first, then by days remaining
+    result.sort(key=lambda x: (
+        not x["is_expired"],  # Expired first
+        x["days_remaining"] if x["days_remaining"] is not None else 9999
+    ))
+    
+    return result
+
+
+@api_router.get("/compliance/summary")
+async def get_compliance_summary(current_user: dict = Depends(get_current_user)):
+    """
+    Get compliance summary statistics for dashboard widgets.
+    """
+    today = datetime.now(timezone.utc).date()
+    today_str = today.isoformat()
+    threshold_30 = (today + timedelta(days=30)).isoformat()
+    threshold_7 = (today + timedelta(days=7)).isoformat()
+    
+    # Get all documents and candidates
+    documents = await db.documents.find({}, {"_id": 0}).to_list(10000)
+    candidates = await db.candidates.find({"status": "Active"}, {"_id": 0}).to_list(10000)
+    
+    # Document counts
+    total_documents = len(documents)
+    expired_count = 0
+    expiring_soon_count = 0
+    critical_count = 0
+    pending_count = 0
+    verified_count = 0
+    orphan_count = 0
+    
+    # Get valid candidate IDs
+    valid_candidate_ids = {c["id"] for c in candidates}
+    
+    for doc in documents:
+        # Check for orphans
+        if not doc.get("candidate_id") or doc.get("candidate_id") not in valid_candidate_ids:
+            orphan_count += 1
+            continue
+        
+        if doc.get("status") == "Verified":
+            verified_count += 1
+        elif doc.get("status") == "Pending":
+            pending_count += 1
+        
+        if doc.get("expiry_date"):
+            if doc["expiry_date"] < today_str:
+                expired_count += 1
+            elif doc["expiry_date"] <= threshold_7:
+                critical_count += 1
+            elif doc["expiry_date"] <= threshold_30:
+                expiring_soon_count += 1
+    
+    # Calculate candidate-level compliance
+    candidate_compliance = await calculate_all_candidate_compliance(candidates, documents, today)
+    
+    fully_compliant = sum(1 for c in candidate_compliance.values() if c["status"] == "Fully Compliant")
+    pending_docs = sum(1 for c in candidate_compliance.values() if c["status"] == "Pending Documents")
+    expiring_candidates = sum(1 for c in candidate_compliance.values() if c["status"] == "Expiring Soon")
+    expired_candidates = sum(1 for c in candidate_compliance.values() if c["status"] == "Expired")
+    missing_docs = sum(1 for c in candidate_compliance.values() if c["status"] == "Missing Required Documents")
+    
+    return {
+        "documents": {
+            "total": total_documents,
+            "verified": verified_count,
+            "pending": pending_count,
+            "expiring_soon": expiring_soon_count,
+            "critical": critical_count,
+            "expired": expired_count,
+            "orphan": orphan_count
+        },
+        "candidates": {
+            "total": len(candidates),
+            "fully_compliant": fully_compliant,
+            "pending_documents": pending_docs,
+            "expiring_soon": expiring_candidates,
+            "expired": expired_candidates,
+            "missing_documents": missing_docs
+        }
+    }
+
+
+async def calculate_all_candidate_compliance(candidates: list, documents: list, today) -> dict:
+    """Calculate compliance status for all candidates"""
+    # Group documents by candidate
+    docs_by_candidate = {}
+    for doc in documents:
+        cid = doc.get("candidate_id")
+        if cid:
+            docs_by_candidate.setdefault(cid, []).append(doc)
+    
+    result = {}
+    for candidate in candidates:
+        cid = candidate["id"]
+        candidate_docs = docs_by_candidate.get(cid, [])
+        result[cid] = calculate_candidate_compliance_status(candidate_docs, today)
+    
+    return result
+
+
+def calculate_candidate_compliance_status(documents: list, today) -> dict:
+    """
+    Calculate overall compliance status for a candidate.
+    Returns status and breakdown.
+    """
+    if isinstance(today, str):
+        today = datetime.strptime(today, "%Y-%m-%d").date()
+    
+    threshold_30 = today + timedelta(days=30)
+    
+    # Get document types present
+    doc_types = {d.get("document_type") for d in documents}
+    
+    # Check for missing required documents
+    missing_required = [rt for rt in REQUIRED_DOCUMENT_TYPES if rt not in doc_types]
+    
+    # Analyze documents
+    verified_count = 0
+    pending_count = 0
+    expiring_count = 0
+    expired_count = 0
+    
+    for doc in documents:
+        status = doc.get("status", "Pending")
+        expiry_date = doc.get("expiry_date")
+        
+        # Check expiry
+        is_expired = False
+        is_expiring = False
+        
+        if expiry_date:
+            try:
+                if "T" in expiry_date:
+                    expiry = datetime.fromisoformat(expiry_date.replace("Z", "+00:00")).date()
+                else:
+                    expiry = datetime.strptime(expiry_date, "%Y-%m-%d").date()
+                
+                if expiry < today:
+                    is_expired = True
+                    expired_count += 1
+                elif expiry <= threshold_30:
+                    is_expiring = True
+                    expiring_count += 1
+            except:
+                pass
+        
+        if not is_expired and not is_expiring:
+            if status == "Verified":
+                verified_count += 1
+            elif status == "Pending":
+                pending_count += 1
+    
+    # Determine overall status (priority order)
+    if expired_count > 0:
+        overall_status = "Expired"
+    elif missing_required:
+        overall_status = "Missing Required Documents"
+    elif expiring_count > 0:
+        overall_status = "Expiring Soon"
+    elif pending_count > 0:
+        overall_status = "Pending Documents"
+    else:
+        overall_status = "Fully Compliant"
+    
+    return {
+        "status": overall_status,
+        "verified": verified_count,
+        "pending": pending_count,
+        "expiring": expiring_count,
+        "expired": expired_count,
+        "missing_required": missing_required,
+        "total_documents": len(documents)
+    }
+
+
+@api_router.get("/compliance/candidate/{candidate_id}")
+async def get_candidate_compliance(candidate_id: str, current_user: dict = Depends(get_current_user)):
+    """
+    Get compliance status and documents for a specific candidate.
+    """
+    candidate = await db.candidates.find_one({"id": candidate_id}, {"_id": 0})
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    
+    documents = await db.documents.find(
+        {"candidate_id": candidate_id}, {"_id": 0}
+    ).to_list(100)
+    
+    today = datetime.now(timezone.utc).date()
+    
+    # Calculate compliance status
+    compliance = calculate_candidate_compliance_status(documents, today)
+    
+    # Process documents with calculated status
+    processed_docs = []
+    for doc in documents:
+        days_remaining = None
+        is_expired = False
+        calculated_status = doc.get("status", "Pending")
+        
+        if doc.get("expiry_date"):
+            try:
+                if "T" in doc["expiry_date"]:
+                    expiry = datetime.fromisoformat(doc["expiry_date"].replace("Z", "+00:00")).date()
+                else:
+                    expiry = datetime.strptime(doc["expiry_date"], "%Y-%m-%d").date()
+                
+                days_remaining = (expiry - today).days
+                is_expired = days_remaining < 0
+                
+                if is_expired:
+                    calculated_status = "Expired"
+                elif days_remaining <= 7:
+                    calculated_status = "Critical"
+                elif days_remaining <= 30:
+                    calculated_status = "Expiring Soon"
+            except:
+                pass
+        
+        processed_docs.append({
+            **doc,
+            "days_remaining": days_remaining,
+            "is_expired": is_expired,
+            "calculated_status": calculated_status
+        })
+    
+    return {
+        "candidate": {
+            "id": candidate["id"],
+            "name": f"{candidate['first_name']} {candidate['last_name']}",
+            "email": candidate.get("email"),
+            "status": candidate.get("status")
+        },
+        "compliance": compliance,
+        "documents": processed_docs,
+        "required_types": REQUIRED_DOCUMENT_TYPES
+    }
+
+
 @api_router.get("/compliance/expiring")
 async def get_expiring_documents(
     days: int = Query(default=30, ge=1, le=90),
@@ -1943,9 +2313,22 @@ async def get_expiring_documents(
             expiry = doc["expiry_date"]
             if expiry <= future_date:
                 # Get candidate info
-                candidate = await db.candidates.find_one({"id": doc["candidate_id"]}, {"_id": 0, "first_name": 1, "last_name": 1})
+                candidate = await db.candidates.find_one({"id": doc.get("candidate_id")}, {"_id": 0, "first_name": 1, "last_name": 1, "email": 1, "province": 1})
                 doc["candidate_name"] = f"{candidate['first_name']} {candidate['last_name']}" if candidate else "Unknown"
+                doc["candidate_email"] = candidate.get("email") if candidate else None
+                doc["candidate_province"] = candidate.get("province") if candidate else None
                 doc["is_expired"] = expiry < today
+                
+                # Calculate days remaining
+                try:
+                    if "T" in expiry:
+                        expiry_date = datetime.fromisoformat(expiry.replace("Z", "+00:00")).date()
+                    else:
+                        expiry_date = datetime.strptime(expiry, "%Y-%m-%d").date()
+                    doc["days_remaining"] = (expiry_date - datetime.now(timezone.utc).date()).days
+                except:
+                    doc["days_remaining"] = None
+                
                 expiring.append(doc)
     
     return sorted(expiring, key=lambda x: x.get("expiry_date", ""))
