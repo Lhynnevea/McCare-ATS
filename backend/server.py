@@ -2154,6 +2154,105 @@ async def get_document_types(current_user: dict = Depends(get_current_user)):
         {"id": "other", "name": "Other", "required": False}
     ]
 
+# ==================== NOTIFICATIONS ====================
+
+class NotificationSettingsUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    sender_name: Optional[str] = None
+    sender_email: Optional[str] = None
+    new_lead_enabled: Optional[bool] = None
+    new_lead_notify_owner: Optional[bool] = None
+    new_lead_fallback_emails: Optional[List[str]] = None
+    expiring_credential_enabled: Optional[bool] = None
+    expiring_thresholds: Optional[List[int]] = None
+    expired_alert_enabled: Optional[bool] = None
+    expiring_notify_compliance: Optional[bool] = None
+    expiring_notify_recruiter: Optional[bool] = None
+    expiring_notify_candidate: Optional[bool] = None
+    compliance_emails: Optional[List[str]] = None
+    quiet_hours_enabled: Optional[bool] = None
+    quiet_hours_start: Optional[str] = None
+    quiet_hours_end: Optional[str] = None
+
+@api_router.get("/notifications/settings")
+async def get_notification_settings(current_user: dict = Depends(get_current_user)):
+    """Get notification settings (Admin only)"""
+    if current_user["role"] not in ["Admin"]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return await notification_service.get_settings()
+
+@api_router.put("/notifications/settings")
+async def update_notification_settings(
+    settings: NotificationSettingsUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update notification settings (Admin only)"""
+    if current_user["role"] not in ["Admin"]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    update_data = {k: v for k, v in settings.model_dump().items() if v is not None}
+    return await notification_service.update_settings(update_data)
+
+@api_router.get("/notifications")
+async def get_notifications(
+    unread_only: bool = Query(False),
+    limit: int = Query(50, ge=1, le=200),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get notifications for current user"""
+    return await notification_service.get_user_notifications(
+        user_id=current_user["id"],
+        unread_only=unread_only,
+        limit=limit
+    )
+
+@api_router.get("/notifications/unread-count")
+async def get_unread_notification_count(current_user: dict = Depends(get_current_user)):
+    """Get count of unread notifications"""
+    count = await notification_service.get_unread_count(current_user["id"])
+    return {"count": count}
+
+@api_router.post("/notifications/{notification_id}/read")
+async def mark_notification_read(
+    notification_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Mark a notification as read"""
+    success = await notification_service.mark_as_read(notification_id, current_user["id"])
+    if not success:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    return {"message": "Notification marked as read"}
+
+@api_router.post("/notifications/read-all")
+async def mark_all_notifications_read(current_user: dict = Depends(get_current_user)):
+    """Mark all notifications as read"""
+    count = await notification_service.mark_all_as_read(current_user["id"])
+    return {"message": f"Marked {count} notifications as read", "count": count}
+
+@api_router.post("/notifications/check-expiring-credentials")
+async def check_expiring_credentials(current_user: dict = Depends(get_current_user)):
+    """Manually trigger expiring credential check (Admin only)"""
+    if current_user["role"] not in ["Admin", "Compliance Officer"]:
+        raise HTTPException(status_code=403, detail="Admin or Compliance access required")
+    
+    result = await notification_service.check_expiring_credentials()
+    return result
+
+@api_router.get("/notifications/logs")
+async def get_notification_logs(
+    notification_type: Optional[str] = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get email notification logs (Admin only)"""
+    if current_user["role"] not in ["Admin"]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    return await notification_service.get_notification_logs(
+        notification_type=notification_type,
+        limit=limit
+    )
+
 # ==================== SEED DATA ENDPOINT ====================
 
 @api_router.post("/seed")
