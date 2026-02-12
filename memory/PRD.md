@@ -203,6 +203,7 @@ Build a full-stack web app called McCare Global ATS – Travel Nurse Recruitment
 |----------|--------|-------------|
 | `/api/public/leads` | POST | Submit lead from external integrations |
 | `/api/public/form-submit` | POST | Submit lead from ATS embedded form |
+| `/api/public/lead-capture-settings` | GET | Get form settings for embedded forms (no auth) |
 | `/api/public/landing-page` | POST | Submit lead from custom landing pages |
 | `/api/webhooks/hubspot` | POST | Receive leads from HubSpot webhooks |
 
