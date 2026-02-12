@@ -176,7 +176,8 @@ const LeadsPage = () => {
       specialty: lead.specialty || '',
       province_preference: lead.province_preference || '',
       tags: lead.tags || [],
-      notes: lead.notes || ''
+      notes: lead.notes || '',
+      stage: lead.stage || 'New Lead'
     });
     setShowEditDialog(true);
   };
@@ -191,7 +192,8 @@ const LeadsPage = () => {
       specialty: '',
       province_preference: '',
       tags: [],
-      notes: ''
+      notes: '',
+      stage: 'New Lead'
     });
   };
 
