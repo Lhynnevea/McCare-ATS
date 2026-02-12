@@ -1261,6 +1261,104 @@ async def public_leads_options():
         }
     )
 
+@api_router.options("/public/lead-capture-settings")
+async def lead_capture_settings_options():
+    """Handle CORS preflight for public lead capture settings"""
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Accept, Origin",
+            "Access-Control-Max-Age": "86400",
+        }
+    )
+
+@api_router.get("/public/lead-capture-settings")
+async def get_public_lead_capture_settings(request: Request):
+    """
+    PUBLIC endpoint to get lead capture settings for embedded forms.
+    No authentication required.
+    Always returns valid JSON with default settings if none exist.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Log the settings fetch
+    log_entry = {
+        "id": str(uuid.uuid4()),
+        "created_at": now,
+        "origin": request.headers.get("origin", "unknown"),
+        "referer": request.headers.get("referer", "unknown"),
+        "route": "/api/public/lead-capture-settings",
+        "method": "GET",
+        "ip": request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown"),
+        "user_agent": request.headers.get("user-agent", "unknown"),
+        "status": "success",
+        "error_message": None
+    }
+    
+    try:
+        settings = await get_lead_capture_settings()
+        
+        # Return only public-safe fields
+        public_settings = {
+            "form_enabled": settings.get("form_enabled", True),
+            "form_title": settings.get("form_title", "Join Our Healthcare Team"),
+            "form_description": settings.get("form_description", "Submit your information to explore travel nursing opportunities across Canada."),
+            "required_fields": settings.get("required_fields", ["first_name", "last_name", "email"]),
+            "optional_fields": settings.get("optional_fields", ["phone", "specialty", "province_preference", "notes"]),
+            "specialties": settings.get("specialties", ["ICU", "ER", "Med-Surg", "OR", "Pediatrics", "NICU", "L&D", "Cardiac", "Oncology", "Psych"]),
+            "provinces": settings.get("provinces", ["Ontario", "British Columbia", "Alberta", "Quebec", "Manitoba", "Saskatchewan", "Nova Scotia", "New Brunswick"]),
+            "success_message": settings.get("success_message", "Thank you! We will be in touch soon."),
+            "submit_button_text": settings.get("submit_button_text", "Submit Application"),
+            "branding": {
+                "primary_color": settings.get("primary_color", "#ff0000"),
+                "company_name": "McCare Global Healthcare Services"
+            }
+        }
+        
+        await db.lead_intake_logs.insert_one(log_entry)
+        
+        return JSONResponse(
+            content=public_settings,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Accept, Origin",
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error fetching public lead capture settings: {e}")
+        log_entry["status"] = "error"
+        log_entry["error_message"] = str(e)
+        await db.lead_intake_logs.insert_one(log_entry)
+        
+        # Return default settings even on error
+        default_settings = {
+            "form_enabled": True,
+            "form_title": "Join Our Healthcare Team",
+            "form_description": "Submit your information to explore travel nursing opportunities across Canada.",
+            "required_fields": ["first_name", "last_name", "email"],
+            "optional_fields": ["phone", "specialty", "province_preference", "notes"],
+            "specialties": ["ICU", "ER", "Med-Surg", "OR", "Pediatrics", "NICU", "L&D", "Cardiac", "Oncology", "Psych"],
+            "provinces": ["Ontario", "British Columbia", "Alberta", "Quebec", "Manitoba", "Saskatchewan", "Nova Scotia", "New Brunswick"],
+            "success_message": "Thank you! We will be in touch soon.",
+            "submit_button_text": "Submit Application",
+            "branding": {
+                "primary_color": "#ff0000",
+                "company_name": "McCare Global Healthcare Services"
+            }
+        }
+        
+        return JSONResponse(
+            content=default_settings,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Accept, Origin",
+            }
+        )
+
 # Built-in ATS Form Submission Endpoint
 @api_router.post("/public/form-submit")
 async def submit_form_lead(request: Request, payload: dict):
