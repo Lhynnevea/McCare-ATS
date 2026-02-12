@@ -48,9 +48,23 @@ Build a full-stack web app called McCare Global ATS – Travel Nurse Recruitment
 - Unified lead inbox with color-coded source badges
 
 ### Leads & Pipelines
-- Kanban board with 8 pipeline stages
+- Kanban board with 9 pipeline stages (including Converted)
 - Lead card with contact info, specialty, source, tags
-- Convert lead to candidate functionality
+- **Enhanced Lead Actions Dropdown Menu**:
+  - Edit Lead
+  - Assign Recruiter
+  - Move Stage
+  - Convert to Candidate
+  - Reject Lead
+  - Delete Lead
+- **Convert to Candidate Workflow**:
+  - Field mapping (name, email, phone, specialty, province, notes, recruiter)
+  - Bidirectional linking (lead.candidateId ↔ candidate.sourceLeadId)
+  - Duplicate detection by email
+  - Option to link to existing candidate
+  - Configurable post-conversion stage (Converted/Hired)
+  - Activity logging with user attribution
+  - Auto-redirect to candidate profile
 - Color-coded source badges (HubSpot, ATS Form, API, Landing Page, etc.)
 
 ### Candidate/Nurse Management
