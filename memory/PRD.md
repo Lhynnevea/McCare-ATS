@@ -137,6 +137,14 @@ Build a full-stack web app called McCare Global ATS – Travel Nurse Recruitment
   - Upload dialog with file picker, document type, dates
   - Progress indicator during upload
   - Download/Verify/Delete actions for documents
+- ✅ **NEW (Feb 12): Notification System**
+  - In-app notifications with bell icon and unread count
+  - Notifications dropdown with mark as read
+  - New lead notifications (in-app + email logged)
+  - Expiring credential alerts (configurable thresholds)
+  - Notification Settings page with 4 tabs
+  - Email provider abstraction (Demo/SendGrid/AWS SES ready)
+  - Email audit logs for compliance
 
 ### Documentation
 - ✅ USER_GUIDE.md - Complete workflow documentation
