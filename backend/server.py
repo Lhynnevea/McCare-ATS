@@ -468,7 +468,7 @@ async def get_leads(
     return leads
 
 @api_router.post("/leads")
-async def create_lead(lead: LeadCreate, current_user: dict = Depends(get_current_user)):
+async def create_lead(lead: LeadCreate, background_tasks: BackgroundTasks, current_user: dict = Depends(get_current_user)):
     lead_dict = lead.model_dump()
     lead_dict["id"] = str(uuid.uuid4())
     lead_dict["stage"] = "New Lead"
@@ -488,6 +488,9 @@ async def create_lead(lead: LeadCreate, current_user: dict = Depends(get_current
         "user_id": current_user["id"],
         "created_at": datetime.now(timezone.utc).isoformat()
     })
+    
+    # Send new lead notification (background task)
+    background_tasks.add_task(notification_service.notify_new_lead, lead_dict, current_user)
     
     return serialize_doc(lead_dict)
 
