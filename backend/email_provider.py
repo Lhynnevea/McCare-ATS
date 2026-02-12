@@ -141,7 +141,7 @@ Subject: {subject}
 """)
         
         # Store in database if available
-        if self.db:
+        if self.db is not None:
             log_entry = {
                 "id": message_id,
                 "type": metadata.get("notification_type") if metadata else "general",
