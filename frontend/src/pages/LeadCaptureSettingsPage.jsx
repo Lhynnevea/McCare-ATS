@@ -46,6 +46,8 @@ const LeadCaptureSettingsPage = () => {
   const [settings, setSettings] = useState(null);
   const [embedCode, setEmbedCode] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [intakeLogs, setIntakeLogs] = useState([]);
+  const [intakeLogsSummary, setIntakeLogsSummary] = useState(null);
   const [intakeStats, setIntakeStats] = useState(null);
   const [recruiters, setRecruiters] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -60,22 +62,40 @@ const LeadCaptureSettingsPage = () => {
 
   const fetchData = async () => {
     try {
-      const [settingsRes, embedRes, logsRes, statsRes, usersRes] = await Promise.all([
+      const [settingsRes, embedRes, logsRes, statsRes, usersRes, intakeLogsRes, intakeSummaryRes] = await Promise.all([
         api.get('/lead-capture/settings'),
         api.get('/lead-capture/embed-code'),
         api.get('/lead-audit-logs?limit=50'),
         api.get('/lead-intake/stats'),
-        api.get('/users')
+        api.get('/users'),
+        api.get('/lead-intake/logs?limit=50'),
+        api.get('/lead-intake/logs/summary')
       ]);
       setSettings(settingsRes.data);
       setEmbedCode(embedRes.data);
       setAuditLogs(logsRes.data);
       setIntakeStats(statsRes.data);
       setRecruiters(usersRes.data.filter(u => u.role === 'Recruiter' || u.role === 'Admin'));
+      setIntakeLogs(intakeLogsRes.data);
+      setIntakeLogsSummary(intakeSummaryRes.data);
     } catch (error) {
       toast.error('Failed to fetch lead capture settings');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const refreshIntakeLogs = async () => {
+    try {
+      const [logsRes, summaryRes] = await Promise.all([
+        api.get('/lead-intake/logs?limit=50'),
+        api.get('/lead-intake/logs/summary')
+      ]);
+      setIntakeLogs(logsRes.data);
+      setIntakeLogsSummary(summaryRes.data);
+      toast.success('Logs refreshed');
+    } catch (error) {
+      toast.error('Failed to refresh logs');
     }
   };
 
