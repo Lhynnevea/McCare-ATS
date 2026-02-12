@@ -184,6 +184,18 @@ Build a full-stack web app called McCare Global ATS – Travel Nurse Recruitment
 - Lead capture settings with auto-tagging rules
 - Lead audit logs for all seeded leads
 
+## API Endpoints - Lead Actions
+
+### Lead Conversion & Management Endpoints
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/leads/{id}/convert` | POST | Convert lead to candidate with duplicate detection |
+| `/api/leads/{id}/check-duplicate` | GET | Check if candidate with same email exists |
+| `/api/leads/{id}/reject` | PUT | Reject lead and move to Rejected stage |
+| `/api/leads/{id}/assign` | PUT | Assign recruiter to lead |
+| `/api/recruiters` | GET | Get list of Admin/Recruiter users |
+| `/api/pipeline/stages` | GET | Get all 9 pipeline stages with colors |
+
 ## API Endpoints - Lead Capture System
 
 ### Public Endpoints (No Authentication Required)
