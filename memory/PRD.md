@@ -209,11 +209,29 @@ Build a full-stack web app called McCare Global ATS – Travel Nurse Recruitment
 
 ## Next Tasks List
 1. ~~Add built-in lead capture capabilities~~ ✅ DONE
-2. Add email notifications for new lead alerts
-3. Implement document file upload with storage
-4. Build candidate self-service portal
-5. Add advanced filtering and search capabilities
-6. Implement calendar view for assignments
+2. ~~Implement document file upload with Storage Provider~~ ✅ DONE (Feb 12)
+3. **Migrate to S3/GCS when cloud credentials available** (P1)
+4. Add email notifications for new lead alerts
+5. Build candidate self-service portal
+6. Add advanced filtering and search capabilities
+7. Implement calendar view for assignments
+
+## Storage Provider Architecture
+```
+storage_provider.py
+├── StorageProvider (Abstract Base Class)
+│   ├── upload(content, filename, folder, content_type) -> dict
+│   ├── download(file_path) -> bytes
+│   ├── delete(file_path) -> bool
+│   ├── exists(file_path) -> bool
+│   └── get_full_path(file_path) -> str
+├── LocalStorageProvider (MVP - Active)
+│   └── Stores files in /app/backend/uploads/
+├── S3StorageProvider (Ready - needs AWS credentials)
+│   └── Requires: S3_BUCKET_NAME, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+└── GCSStorageProvider (Ready - needs GCS credentials)
+    └── Requires: GCS_BUCKET_NAME, GOOGLE_APPLICATION_CREDENTIALS
+```
 
 ## Technical Architecture
 
