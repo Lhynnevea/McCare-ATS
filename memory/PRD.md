@@ -197,6 +197,23 @@ Build a full-stack web app called McCare Global ATS – Travel Nurse Recruitment
 
 ## API Endpoints - Lead Actions
 
+### Lead Filtering (GET /api/leads)
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `stage` | string | Single stage filter |
+| `stages` | string | Comma-separated list for multi-stage filter |
+| `source` | string | Single source filter |
+| `sources` | string | Comma-separated list for multi-source filter |
+| `specialty` | string | Single specialty filter |
+| `specialties` | string | Comma-separated list for multi-specialty filter |
+| `province` | string | Single province filter |
+| `provinces` | string | Comma-separated list for multi-province filter |
+| `recruiter_id` | string | Single recruiter filter |
+| `recruiters` | string | Comma-separated list for multi-recruiter filter |
+| `date_from` | string | ISO date (YYYY-MM-DD) filter - leads created on or after |
+| `date_to` | string | ISO date (YYYY-MM-DD) filter - leads created on or before |
+| `search` | string | Text search in first_name, last_name, email |
+
 ### Lead Conversion & Management Endpoints
 | Endpoint | Method | Description |
 |----------|--------|-------------|
