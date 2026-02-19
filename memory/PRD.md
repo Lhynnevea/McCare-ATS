@@ -167,6 +167,17 @@ Build a full-stack web app called McCare Global ATS – Travel Nurse Recruitment
   - Notification Settings page with 4 tabs
   - Email provider abstraction (Demo/SendGrid/AWS SES ready)
   - Email audit logs for compliance
+- ✅ **NEW (Feb 19): Advanced Lead Filtering**
+  - Collapsible advanced filters panel
+  - Stage filter with multi-select badges (all 9 stages)
+  - Source filter with multi-select badges (10 sources)
+  - Recruiter Owner dropdown filter
+  - Date Created range filter (from/to)
+  - Specialty multi-select badges (10 specialties)
+  - Province multi-select badges (8 provinces)
+  - Active filters summary with remove (X) buttons
+  - Clear All Filters button
+  - Filter count badge on Advanced Filters button
 
 ### Documentation
 - ✅ USER_GUIDE.md - Complete workflow documentation
