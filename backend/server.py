@@ -449,22 +449,83 @@ async def get_users(current_user: dict = Depends(get_current_user)):
 @api_router.get("/leads")
 async def get_leads(
     stage: Optional[str] = None,
+    stages: Optional[str] = None,  # Comma-separated list for multi-select
     specialty: Optional[str] = None,
+    specialties: Optional[str] = None,  # Comma-separated list for multi-select
     province: Optional[str] = None,
+    provinces: Optional[str] = None,  # Comma-separated list for multi-select
     recruiter_id: Optional[str] = None,
+    recruiters: Optional[str] = None,  # Comma-separated list for multi-select
+    source: Optional[str] = None,
+    sources: Optional[str] = None,  # Comma-separated list for multi-select
+    date_from: Optional[str] = None,  # ISO date string
+    date_to: Optional[str] = None,  # ISO date string
+    search: Optional[str] = None,  # Text search for name/email
     current_user: dict = Depends(get_current_user)
 ):
     query = {}
-    if stage:
+    
+    # Stage filter (single or multi)
+    if stages:
+        stage_list = [s.strip() for s in stages.split(",") if s.strip()]
+        if stage_list:
+            query["stage"] = {"$in": stage_list}
+    elif stage:
         query["stage"] = stage
-    if specialty:
+    
+    # Specialty filter (single or multi)
+    if specialties:
+        specialty_list = [s.strip() for s in specialties.split(",") if s.strip()]
+        if specialty_list:
+            query["specialty"] = {"$in": specialty_list}
+    elif specialty:
         query["specialty"] = specialty
-    if province:
+    
+    # Province filter (single or multi)
+    if provinces:
+        province_list = [p.strip() for p in provinces.split(",") if p.strip()]
+        if province_list:
+            query["province_preference"] = {"$in": province_list}
+    elif province:
         query["province_preference"] = province
-    if recruiter_id:
+    
+    # Recruiter filter (single or multi)
+    if recruiters:
+        recruiter_list = [r.strip() for r in recruiters.split(",") if r.strip()]
+        if recruiter_list:
+            query["recruiter_id"] = {"$in": recruiter_list}
+    elif recruiter_id:
         query["recruiter_id"] = recruiter_id
     
-    leads = await db.leads.find(query, {"_id": 0}).to_list(1000)
+    # Source filter (single or multi)
+    if sources:
+        source_list = [s.strip() for s in sources.split(",") if s.strip()]
+        if source_list:
+            query["source"] = {"$in": source_list}
+    elif source:
+        query["source"] = source
+    
+    # Date range filter
+    if date_from or date_to:
+        date_query = {}
+        if date_from:
+            date_query["$gte"] = date_from
+        if date_to:
+            # Add time to include the entire end date
+            date_query["$lte"] = date_to + "T23:59:59.999Z" if "T" not in date_to else date_to
+        if date_query:
+            query["created_at"] = date_query
+    
+    # Text search filter (name or email)
+    if search:
+        search_regex = {"$regex": search, "$options": "i"}
+        query["$or"] = [
+            {"first_name": search_regex},
+            {"last_name": search_regex},
+            {"email": search_regex}
+        ]
+    
+    leads = await db.leads.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return leads
 
 @api_router.post("/leads")
