@@ -452,7 +452,8 @@ const LeadsPage = () => {
       {/* Filters */}
       <Card className="border-0 shadow-sm">
         <CardContent className="p-4">
-          <div className="flex flex-wrap gap-4">
+          {/* Quick Filters Row */}
+          <div className="flex flex-wrap gap-4 items-center">
             <div className="flex-1 min-w-[200px]">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
@@ -489,7 +490,232 @@ const LeadsPage = () => {
                 ))}
               </SelectContent>
             </Select>
+            
+            {/* Advanced Filters Toggle Button */}
+            <Button 
+              variant={showAdvancedFilters ? "secondary" : "outline"}
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              className="gap-2"
+              data-testid="advanced-filters-toggle"
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+              Advanced Filters
+              {activeFilterCount > 0 && (
+                <Badge className="ml-1 bg-red-600 text-white">{activeFilterCount}</Badge>
+              )}
+              {showAdvancedFilters ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </Button>
+            
+            {/* Clear All Filters */}
+            {activeFilterCount > 0 && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={clearAllFilters}
+                className="text-slate-500 hover:text-slate-700"
+                data-testid="clear-all-filters"
+              >
+                <X className="w-4 h-4 mr-1" />
+                Clear All
+              </Button>
+            )}
           </div>
+          
+          {/* Advanced Filters Panel */}
+          {showAdvancedFilters && (
+            <div className="mt-4 pt-4 border-t border-slate-200 space-y-4 animate-fade-in" data-testid="advanced-filters-panel">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                
+                {/* Stage Filter (Multi-select) */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-slate-700">Pipeline Stage</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {PIPELINE_STAGES.map(stage => (
+                      <Badge
+                        key={stage.id}
+                        variant={filterStages.includes(stage.id) ? "default" : "outline"}
+                        className={`cursor-pointer transition-all ${
+                          filterStages.includes(stage.id) 
+                            ? `${stage.color} text-white border-transparent` 
+                            : 'hover:bg-slate-100'
+                        }`}
+                        onClick={() => toggleMultiSelectFilter(stage.id, filterStages, setFilterStages)}
+                        data-testid={`filter-stage-${stage.id.toLowerCase().replace(/\s+/g, '-')}`}
+                      >
+                        {stage.id}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Source Filter (Multi-select) */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-slate-700">Lead Source</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {SOURCES.map(source => (
+                      <Badge
+                        key={source}
+                        variant={filterSources.includes(source) ? "default" : "outline"}
+                        className={`cursor-pointer transition-all ${
+                          filterSources.includes(source) 
+                            ? getSourceBadgeColor(source).replace('bg-', 'bg-').replace('100', '500') + ' text-white border-transparent'
+                            : 'hover:bg-slate-100'
+                        }`}
+                        onClick={() => toggleMultiSelectFilter(source, filterSources, setFilterSources)}
+                        data-testid={`filter-source-${source.toLowerCase().replace(/\s+/g, '-')}`}
+                      >
+                        {source}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Recruiter Owner Filter */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-slate-700">Recruiter Owner</Label>
+                  <Select 
+                    value={filterRecruiters.length === 1 ? filterRecruiters[0] : "all"} 
+                    onValueChange={(v) => setFilterRecruiters(v === "all" ? [] : [v])}
+                  >
+                    <SelectTrigger data-testid="filter-recruiter">
+                      <Users className="w-4 h-4 mr-2" />
+                      <SelectValue placeholder="All Recruiters" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Recruiters</SelectItem>
+                      {recruiters.map(r => (
+                        <SelectItem key={r.id} value={r.id}>
+                          {r.first_name} {r.last_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {/* Date Range Filter */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-slate-700">Date Created (From)</Label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                    <Input
+                      type="date"
+                      value={filterDateFrom}
+                      onChange={(e) => setFilterDateFrom(e.target.value)}
+                      className="pl-10"
+                      data-testid="filter-date-from"
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-slate-700">Date Created (To)</Label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                    <Input
+                      type="date"
+                      value={filterDateTo}
+                      onChange={(e) => setFilterDateTo(e.target.value)}
+                      className="pl-10"
+                      data-testid="filter-date-to"
+                    />
+                  </div>
+                </div>
+                
+                {/* Specialty Multi-select */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-slate-700">Specialties (Multi)</Label>
+                  <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                    {SPECIALTIES.map(specialty => (
+                      <Badge
+                        key={specialty}
+                        variant={filterSpecialties.includes(specialty) ? "default" : "outline"}
+                        className={`cursor-pointer transition-all ${
+                          filterSpecialties.includes(specialty) 
+                            ? 'bg-indigo-500 text-white border-transparent' 
+                            : 'hover:bg-slate-100'
+                        }`}
+                        onClick={() => toggleMultiSelectFilter(specialty, filterSpecialties, setFilterSpecialties)}
+                        data-testid={`filter-specialty-multi-${specialty.toLowerCase()}`}
+                      >
+                        {specialty}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Province Multi-select */}
+                <div className="space-y-2 lg:col-span-2">
+                  <Label className="text-sm font-medium text-slate-700">Provinces (Multi)</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {PROVINCES.map(province => (
+                      <Badge
+                        key={province}
+                        variant={filterProvinces.includes(province) ? "default" : "outline"}
+                        className={`cursor-pointer transition-all ${
+                          filterProvinces.includes(province) 
+                            ? 'bg-teal-500 text-white border-transparent' 
+                            : 'hover:bg-slate-100'
+                        }`}
+                        onClick={() => toggleMultiSelectFilter(province, filterProvinces, setFilterProvinces)}
+                        data-testid={`filter-province-multi-${province.toLowerCase().replace(/\s+/g, '-')}`}
+                      >
+                        {province}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Active Filters Summary */}
+              {activeFilterCount > 0 && (
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+                  <span className="text-sm text-slate-500">Active filters:</span>
+                  {filterStages.map(stage => (
+                    <Badge key={`active-${stage}`} variant="secondary" className="gap-1">
+                      Stage: {stage}
+                      <X className="w-3 h-3 cursor-pointer" onClick={() => toggleMultiSelectFilter(stage, filterStages, setFilterStages)} />
+                    </Badge>
+                  ))}
+                  {filterSources.map(source => (
+                    <Badge key={`active-${source}`} variant="secondary" className="gap-1">
+                      Source: {source}
+                      <X className="w-3 h-3 cursor-pointer" onClick={() => toggleMultiSelectFilter(source, filterSources, setFilterSources)} />
+                    </Badge>
+                  ))}
+                  {filterSpecialties.map(specialty => (
+                    <Badge key={`active-${specialty}`} variant="secondary" className="gap-1">
+                      Specialty: {specialty}
+                      <X className="w-3 h-3 cursor-pointer" onClick={() => toggleMultiSelectFilter(specialty, filterSpecialties, setFilterSpecialties)} />
+                    </Badge>
+                  ))}
+                  {filterProvinces.map(province => (
+                    <Badge key={`active-${province}`} variant="secondary" className="gap-1">
+                      Province: {province}
+                      <X className="w-3 h-3 cursor-pointer" onClick={() => toggleMultiSelectFilter(province, filterProvinces, setFilterProvinces)} />
+                    </Badge>
+                  ))}
+                  {filterRecruiters.length > 0 && (
+                    <Badge variant="secondary" className="gap-1">
+                      Recruiter: {recruiters.find(r => r.id === filterRecruiters[0])?.first_name || 'Selected'}
+                      <X className="w-3 h-3 cursor-pointer" onClick={() => setFilterRecruiters([])} />
+                    </Badge>
+                  )}
+                  {filterDateFrom && (
+                    <Badge variant="secondary" className="gap-1">
+                      From: {filterDateFrom}
+                      <X className="w-3 h-3 cursor-pointer" onClick={() => setFilterDateFrom('')} />
+                    </Badge>
+                  )}
+                  {filterDateTo && (
+                    <Badge variant="secondary" className="gap-1">
+                      To: {filterDateTo}
+                      <X className="w-3 h-3 cursor-pointer" onClick={() => setFilterDateTo('')} />
+                    </Badge>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
