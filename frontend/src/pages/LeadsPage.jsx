@@ -52,7 +52,12 @@ import {
   Users,
   Link2,
   AlertTriangle,
-  CheckCircle
+  CheckCircle,
+  ChevronDown,
+  ChevronUp,
+  X,
+  Calendar,
+  SlidersHorizontal
 } from 'lucide-react';
 
 const PIPELINE_STAGES = [
