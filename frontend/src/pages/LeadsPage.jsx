@@ -98,8 +98,21 @@ const LeadsPage = () => {
   const [recruiters, setRecruiters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Advanced filter states
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [filterSpecialties, setFilterSpecialties] = useState([]);
+  const [filterProvinces, setFilterProvinces] = useState([]);
+  const [filterStages, setFilterStages] = useState([]);
+  const [filterSources, setFilterSources] = useState([]);
+  const [filterRecruiters, setFilterRecruiters] = useState([]);
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+  
+  // Keep legacy single-select for backward compatibility
   const [filterSpecialty, setFilterSpecialty] = useState('');
   const [filterProvince, setFilterProvince] = useState('');
+  
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showAssignDialog, setShowAssignDialog] = useState(false);
@@ -127,16 +140,42 @@ const LeadsPage = () => {
     stage: 'New Lead'
   });
 
+  // Count active filters
+  const activeFilterCount = [
+    filterSpecialties.length > 0,
+    filterProvinces.length > 0,
+    filterStages.length > 0,
+    filterSources.length > 0,
+    filterRecruiters.length > 0,
+    filterDateFrom !== '',
+    filterDateTo !== '',
+    filterSpecialty !== '',
+    filterProvince !== ''
+  ].filter(Boolean).length;
+
   useEffect(() => {
     fetchLeads();
     fetchRecruiters();
-  }, [filterSpecialty, filterProvince]);
+  }, [filterSpecialties, filterProvinces, filterStages, filterSources, filterRecruiters, filterDateFrom, filterDateTo, filterSpecialty, filterProvince]);
 
   const fetchLeads = async () => {
     try {
       const params = new URLSearchParams();
-      if (filterSpecialty) params.append('specialty', filterSpecialty);
-      if (filterProvince) params.append('province', filterProvince);
+      
+      // Multi-select filters
+      if (filterSpecialties.length > 0) params.append('specialties', filterSpecialties.join(','));
+      if (filterProvinces.length > 0) params.append('provinces', filterProvinces.join(','));
+      if (filterStages.length > 0) params.append('stages', filterStages.join(','));
+      if (filterSources.length > 0) params.append('sources', filterSources.join(','));
+      if (filterRecruiters.length > 0) params.append('recruiters', filterRecruiters.join(','));
+      
+      // Date range filters
+      if (filterDateFrom) params.append('date_from', filterDateFrom);
+      if (filterDateTo) params.append('date_to', filterDateTo);
+      
+      // Legacy single-select filters (fallback)
+      if (filterSpecialty && filterSpecialties.length === 0) params.append('specialty', filterSpecialty);
+      if (filterProvince && filterProvinces.length === 0) params.append('province', filterProvince);
       
       const response = await api.get(`/leads?${params.toString()}`);
       setLeads(response.data);
@@ -144,6 +183,27 @@ const LeadsPage = () => {
       toast.error('Failed to fetch leads');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const clearAllFilters = () => {
+    setFilterSpecialties([]);
+    setFilterProvinces([]);
+    setFilterStages([]);
+    setFilterSources([]);
+    setFilterRecruiters([]);
+    setFilterDateFrom('');
+    setFilterDateTo('');
+    setFilterSpecialty('');
+    setFilterProvince('');
+    setSearchQuery('');
+  };
+
+  const toggleMultiSelectFilter = (value, currentValues, setter) => {
+    if (currentValues.includes(value)) {
+      setter(currentValues.filter(v => v !== value));
+    } else {
+      setter([...currentValues, value]);
     }
   };
 
