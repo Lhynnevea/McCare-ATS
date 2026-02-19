@@ -1,0 +1,160 @@
+<analysis>original_problem_statement:
+The user has requested a series of features and bug fixes for the McCare Global ATS application.
+
+**PRODUCT REQUIREMENTS (from previous sessions):**
+
+1.  **Storage Abstraction:** Implement a swappable storage provider for file uploads (MVP with local storage is done).
+2.  **Deployment Workflow:** Establish a safe deployment workflow with a migration system (Alembic is in place).
+3.  **Logo Update:** (Completed).
+4.  **Email Notification System:** Implement a full notification system (MVP with mock provider is done).
+5.  **Fix Deployment Blockers:** (Completed).
+6.  **Fix Embedded Lead Form:** Debug and fix the embedded lead form (Backend fixes are complete, pending user action).
+7.  **Fix Lead Pipeline Stages:** Ensure all stages are supported (Completed).
+8.  **Redesign Compliance Module:** Overhaul the compliance dashboard and logic (Completed).
+9.  **Convert to Candidate Feature:** Enhance the Leads module with a Convert to Candidate action, including duplicate detection, linking, and activity logging (Completed).
+10. **Advanced Lead Filtering:** Implement an advanced filtering panel on the leads page to filter by recruiter, status, source, date, and more.
+
+**User's preferred language**: English
+
+**what currently exists?**
+The project is a full-stack application with a React frontend, a Python (FastAPI) backend, and a MongoDB database. The application has core ATS functionalities including lead management, a redesigned compliance module, and a notification system. Key recent additions include:
+- A comprehensive Convert to Candidate workflow with a full actions dropdown (Edit, Assign, Move, Convert, Reject, Delete) on each lead.
+- A public, unauthenticated API endpoint to fetch lead capture form settings, resolving issues with embedded forms on external sites.
+- The UI for the login page has been corrected to show the proper demo credentials.
+
+**Last working item**:
+- Last item agent was working: The user requested an advanced filtering system for the Leads module. The agent began exploring the codebase to plan the implementation but has not yet written any code for the feature itself.
+- Status: NOT STARTED
+- Agent Testing Done: N
+- Which testing method agent to use? both
+- User Testing Done: N
+
+**All Pending/In progress Issue list**:
+-   **Issue 1: Lead Capture Settings on External Site (P0)**
+    -   **Description**: The embedded lead form on the user's external WordPress site () was failing to load settings. The agent has fixed the backend by creating a public endpoint (), ensuring CORS is correctly configured, and updating the embed code generator in the app.
+    -   **Status**: USER VERIFICATION PENDING
+    -   **Next Action**: The user needs to take the **newly generated v2 embed code** from the Embed Form tab in the application and update it on their WordPress site. The backend is fully functional and ready.
+
+**In progress Task List**:
+-   **Task 1: Implement Advanced Lead Filtering (P0)**
+    -   **Description**: Add a filter panel to the Leads page (Kanban, List, and Card views) with dropdowns/multi-selects for Recruiter Owner, Stage/Status, Lead Source, Date Created, Specialty, and Province Preference.
+    -   **Where to resume**: The agent has already explored the frontend () and backend () files. The next step is to start implementing the UI for the filter panel in  and then update the backend lead query endpoint () to accept and process the filter parameters.
+    -   **What will be achieved with this?**: Users will be able to perform complex filtering on the leads list, improving workflow efficiency for recruiters and admins.
+    -   **Status**: IN PROGRESS
+    -   **Should Test frontend/backend/both after fix?**: Both
+    -   **Blocked on something**: None
+
+**Upcoming and Future Tasks**
+-   **Upcoming Tasks:**
+    -   **(P1) Migrate File Uploads to Cloud Storage:** Replace the  with a real cloud storage provider like  or .
+    -   **(P2) Implement Real Email Provider:** Replace the  with a real email service integration (e.g., SendGrid, AWS SES) to send actual emails for notifications.
+
+**Completed work in this session**
+-   **Convert to Candidate Feature (DONE):**
+    -   Enhanced the backend  endpoint to handle duplicate candidate detection, linking to existing candidates, and activity logging.
+    -   Added new backend endpoints for rejecting and assigning leads.
+    -   Implemented a comprehensive Actions dropdown menu in  for each lead, with modals for Convert to Candidate, Assign Recruiter, Move Stage, and Reject Lead.
+    -   This feature was fully validated by the testing agent.
+-   **Embedded Lead Form Bug Fix (DONE - Pending User Action):**
+    -   Created a new public endpoint  that returns form configuration without authentication.
+    -   Ensured CORS headers and OPTIONS preflight requests are handled correctly for external domains.
+    -   Improved the embed code snippet to be more robust and use absolute URLs.
+    -   Updated the API Endpoints and Embed Form tabs on the Lead Capture page to reflect the changes.
+-   **Login Page Credentials Fix (DONE):**
+    -   Updated the hardcoded demo credentials displayed on  to match the actual seeded admin user ().
+
+**Earlier issues found/mentioned but not fixed**
+-   **Issue 1: Orphan Documents in Seed Data**
+    -   **Debug checklist**: A previous migration to fix orphan documents (documents without a ) was ineffective on existing seed data. A script needs to be run or a new migration created to clean up this data to avoid confusion during testing.
+    -   **Why to solve this issue and what will be achieved with this?**: Ensures data integrity and prevents invalid data from appearing in the compliance module.
+    -   **Should Test frontend/backend/both after fix?**: Backend
+    -   **Is recurring issue?**: N
+
+**Known issue recurrence from previous fork**
+-   Issue recurrence in previous fork: None
+-   Recurrence count: 0
+-   Status: NA
+
+**Code Architecture**
+
+
+**Key Technical Concepts**
+-   **Frontend:** React, Vite, Tailwind CSS
+-   **Backend:** Python, FastAPI
+-   **Database:** MongoDB
+-   **Architecture:** Decoupled frontend/backend, Service-oriented patterns, Abstraction for external services.
+-   **Migrations:** Alembic for managing data changes.
+
+**key DB schema**
+-   **leads:**  (Added  and a Converted stage)
+-   **candidates:**  (Added )
+-   **users:** 
+-   **activity:**  (New collection for logging)
+-   **lead_intake_logs:** 
+
+**changes in tech stack**
+-   None.
+
+**All files of reference**
+-   : Heavily modified to add the Convert to Candidate flow, new lead action endpoints (reject, assign), and the public lead capture settings endpoint.
+-   : Significantly rewritten to add the Actions dropdown menu, modals for each action, and the associated API call logic.
+-   : Updated to display the new public settings endpoint and provide the improved v2 embed code.
+-   : Minor text update for demo credentials.
+-   : Updated to reflect completed tasks.
+
+**Areas that need refactoring**:
+- The use of Alembic with MongoDB is non-standard and might be worth reviewing for a better long-term solution for NoSQL data migrations.
+
+**key api endpoints**
+-   : (Enhanced) Converts a lead to a candidate, with duplicate detection.
+-   : (New) Marks a lead as rejected.
+-   : (New) Assigns a lead to a recruiter.
+-   : (New) Public endpoint for fetching embedded form settings.
+-   : (To be modified) Needs to be updated to support advanced filtering.
+-   : Fetches a list of users with the 'recruiter' role.
+
+**Critical Info for New Agent**
+-   The immediate task is to build the advanced filtering feature for the Leads module. The backend and frontend files have been explored, but no implementation has been done.
+-   The fix for the embedded lead form is complete on the backend. The user must update the embed code on their external site. Be prepared to explain this if the user reports the issue again.
+-   The Convert to Candidate feature was a large piece of work and was fully tested by the testing agent. The test report is available for reference.
+
+**documents and test reports created in this job**
+-   
+-   
+
+**Last 10 User Messages and any pending HUMAN messages**
+1.  **User (Message 486):** Requested the Convert to Candidate feature. (COMPLETED)
+2.  **Agent (Message 487-542):** Implemented and tested the Convert to Candidate feature.
+3.  **Agent (Message 543):** Confirmed successful testing with the testing agent.
+4.  **Agent (Message 544-558):** Updated PRD.md and finished the task.
+5.  **User (Message 559):** Reported the bug that the lead capture settings fetch is failing on their external site. (COMPLETED - PENDING USER ACTION)
+6.  **Agent (Message 560-615):** Investigated and fixed the backend issue by creating a public endpoint, fixing CORS, and providing a new embed code.
+7.  **Agent (Message 616):** Confirmed all fixes were in place and finished the task, noting the user needs to update their site.
+8.  **User (Message 622):** Requested the new Advanced Filtering feature for the Leads module. (IN PROGRESS)
+9.  **Agent (Message 623):** Acknowledged the new request.
+10. **Agent (Message 624):** Started exploring the codebase to plan the implementation. (CURRENT STATE)
+
+**Project Health Check:**
+-   **Working:** Core ATS functionalities, Lead Management (with Conversion), Compliance Dashboard, Notification System, User/Role Management.
+-   **Mocked:** File Storage (local), Email Notifications (logs to DB).
+-   **Broken:** None. The embedded lead form issue is resolved on the application side and is pending user action on their external site.
+
+**3rd Party Integrations**
+-   None currently integrated.
+-   **Planned Integrations:**
+    -   Cloud Storage: AWS S3 or Google Cloud Storage.
+    -   Email Service: SendGrid, AWS SES, or similar.
+
+**Testing status**
+-   Testing agent used after significant changes: YES (for the Convert to Candidate feature).
+-   Troubleshoot agent used after agent stuck in loop: NO
+-   Test files created:
+    -   
+-   Known regressions: None.
+
+**Credentials to test flow:**
+-   **Username:** 
+-   **Password:** 
+
+**What agent forgot to execute**
+-   The previous agent did not address the issue of orphan documents present in the initial seed data. This could be cleaned up with a one-time script or migration.</analysis>
